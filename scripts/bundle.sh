@@ -71,7 +71,8 @@ else
   echo "         (run scripts/make_signing_identity.sh once to fix)"
 fi
 sig=$(codesign -dv "$APP" 2>&1)   # captured first: `| grep -q` would SIGPIPE codesign under pipefail
-case "$sig" in *"(runtime)"*) ;; *) echo "ERROR: hardened runtime missing"; exit 1;; esac
+# The flags read "(runtime)" with the identity, "(adhoc,runtime)" ad-hoc (CI): match either.
+case "$sig" in *"flags=0x"*"runtime)"*) ;; *) echo "ERROR: hardened runtime missing"; exit 1;; esac
 echo "built $APP (v$VERSION build $BUILD)"
 # Install into /Applications so Soyla shows up in Launchpad, Spotlight and Finder like any other app.
 DEST=/Applications/Soyla.app
