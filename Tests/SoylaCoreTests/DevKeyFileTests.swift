@@ -20,7 +20,7 @@ struct DevKeyFileTests {
         }
     }
 
-    @Test func testProcessStillUsesTheKeychain() {
+    @Test func processStillUsesTheKeychain() {
         #expect(Secrets.keychain is KeychainStore)
     }
 

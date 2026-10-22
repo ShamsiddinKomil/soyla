@@ -71,7 +71,7 @@ import Foundation
         let url = try #require(ProblemReport.issueURL(body: big, facts: facts()))
         #expect(url.absoluteString.count <= 7500)
         #expect(url.absoluteString.hasPrefix("https://github.com/\(ProblemReport.repo)/issues/new?template=bug.yml"))
-        #expect(url.absoluteString.contains("[truncated]".addingPercentEncoding(withAllowedCharacters: .alphanumerics)!) )
+        #expect(url.absoluteString.contains("[truncated]".addingPercentEncoding(withAllowedCharacters: .alphanumerics)!))
         let small = try #require(ProblemReport.issueURL(body: "Soyla version: 0.3.0\nA&B=C+D", facts: facts()))
         let items = URLComponents(url: small, resolvingAgainstBaseURL: false)?.queryItems ?? []
         #expect(items.first { $0.name == "body" }?.value == "Soyla version: 0.3.0\nA&B=C+D")

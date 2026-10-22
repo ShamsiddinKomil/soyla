@@ -22,7 +22,7 @@ import Testing
         #expect(f(["en-Latn-GB"]) == "en-GB")
     }
 
-    @Test func oldBlobKeepsProviderAndGetsDefaultLocale() throws {
+    @Test func oldBlobKeepsProviderAndGetsDefaultLocale() {
         let (d, cleanup) = suite(); defer { cleanup() }
         d.set(Data(#"{"provider":"google","sttModel":"gemini-3.5-flash","languageHint":"uz"}"#.utf8), forKey: "settings.v1")
         let s = SettingsStore(defaults: d, freshInstallOnDevice: true).current

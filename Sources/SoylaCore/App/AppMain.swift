@@ -447,7 +447,7 @@ extension MainTab {
 extension AppDelegate {
     /// Reserve (and if needed download) the free engine's model when it becomes the engine or its locale changes.
     /// Cheap when nothing changed, so it can run on every settings change.
-    fileprivate func syncOnDeviceModel(_ s: Settings) {
+    private func syncOnDeviceModel(_ s: Settings) {
         let wanted = s.provider == .apple ? s.onDeviceLocale : nil
         guard wanted != onDeviceReadyLocale else { return }
         onDeviceReadyLocale = wanted
@@ -461,7 +461,7 @@ extension AppDelegate {
 
     /// Hotkey-down with the free engine: a status re-read off the recording path. A model that went missing
     /// (purged, reservation lost) is re-reserved so the next Retry can succeed.
-    fileprivate func refreshOnDeviceModel(locale: String) {
+    private func refreshOnDeviceModel(locale: String) {
         Task { [onDeviceModels] in
             await onDeviceModels.refresh(locale: locale)
             if onDeviceModels.state == .needsDownload { await onDeviceModels.ensureReady(locale: locale) }
@@ -474,10 +474,10 @@ extension AppDelegate {
 
 extension AppDelegate {
     /// The shared answer (V-01): what the pill's key card and the menu read, from the same inputs as Home.
-    fileprivate var readiness: Readiness { HomeState.current(status: appStatus, settings: SettingsStore.shared.current).readiness }
+    private var readiness: Readiness { HomeState.current(status: appStatus, settings: SettingsStore.shared.current).readiness }
 
     /// F-16: at key-down, refuse a dictation that cannot work at all and show its card at once.
-    fileprivate func preflightPasses(_ a: HotkeyReducer.Action) -> Bool {
+    private func preflightPasses(_ a: HotkeyReducer.Action) -> Bool {
         let home = HomeState.current(status: appStatus, settings: SettingsStore.shared.current)
         switch preflight.route(a, card: { KeyDownPreflight.card(home: home) }) {
         case .pass: return true
@@ -492,7 +492,7 @@ extension AppDelegate {
 
     /// V-07: a missing mic or Accessibility opens Home (its Permissions group has Allow…); anything else missing opens
     /// the Permissions page, never the default Dictation page.
-    fileprivate func showLaunchWindow() {
+    private func showLaunchWindow() {
         let p = appStatus.permissions
         if appStatus.allPermissions || p.mic != .granted || !p.ax { showMainWindow(tab: .home); return }
         nav.page = .permissions
@@ -519,7 +519,7 @@ extension AppDelegate {
         openInlineConnect(p == .openRouter ? .openRouter : .google)
     }
 
-    fileprivate func openInlineConnect(_ provider: SetupProvider? = nil) {
+    private func openInlineConnect(_ provider: SetupProvider? = nil) {
         nav.page = .languages
         showMainWindow(tab: .settings)
         let home = HomeState.current(status: appStatus, settings: settingsModel.s)
@@ -541,7 +541,6 @@ extension AppDelegate {
         }
         present()
     }
-
 }
 
 // MARK: APP-1 — docs captures without Screen Recording
@@ -549,7 +548,7 @@ extension AppDelegate {
 extension AppDelegate {
     /// `--entry <step>` opens setup at that step from the app; `--snapshot <file.png>` renders Soyla's own front
     /// window into a PNG after 3 s (no Screen Recording needed, nothing leaves the Mac). Dev and docs only.
-    fileprivate func startCaptureIfAsked(_ args: [String]) {
+    private func startCaptureIfAsked(_ args: [String]) {
         if let i = args.firstIndex(of: "--entry"), i + 1 < args.count, let step = SetupStep(rawValue: args[i + 1]) {
             Task { @MainActor in try? await Task.sleep(for: .seconds(1)); openSetup(step) }
         }
@@ -585,7 +584,7 @@ extension AppDelegate {
     private var strings: AppStrings { .for(SettingsStore.shared.current.uiLanguage) }
 
     /// Prototype `renderMenu()`: the status line pair and the one fix, from `MenuHeader` (same inputs as Home).
-    fileprivate var menuHeader: MenuHeader {
+    private var menuHeader: MenuHeader {
         MenuHeader(home: .current(status: appStatus, settings: SettingsStore.shared.current), secureInput: IsSecureEventInputEnabled())
     }
 
@@ -598,9 +597,9 @@ extension AppDelegate {
     /// Warning icon: a missing permission or key, Secure Input, or the free engine's model. A skipped key (Uzbek or
     /// Russian waiting for a key while English works) is calm: no badge. Re-read when permissions/keys or the panel
     /// change and when the menu opens; Secure Input alone has no notification.
-    fileprivate var needsAttention: Bool { menuHeader.badge || engineLine != nil }
+    private var needsAttention: Bool { menuHeader.badge || engineLine != nil }
 
-    fileprivate func buildMenu() {
+    private func buildMenu() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         refreshIcon()
         let t = strings
@@ -646,7 +645,7 @@ extension AppDelegate {
         refreshMenuState()
     }
 
-    fileprivate func refreshMenuState() {
+    private func refreshMenuState() {
         let s = SettingsStore.shared.current
         let t = AppStrings.for(s.uiLanguage)
         if menuLanguage != s.uiLanguage { menuLanguage = s.uiLanguage; buildMainMenu() }
@@ -674,12 +673,12 @@ extension AppDelegate {
     }
 
     /// The one fix routes into setup (mic and Accessibility → Permissions, a key → Connect), "Use Cloud" switches.
-    @objc fileprivate func menuContextClicked() {
+    @objc private func menuContextClicked() {
         guard let item = menuHeader.item else { showMainWindow(tab: .home); return }
         follow(item.route.inApp)
     }
 
-    fileprivate func follow(_ route: MenuRoute) {
+    private func follow(_ route: MenuRoute) {
         switch route {
         case .setup(let step): openSetup(step)
         case .useCloud: settingsModel.useCloudEngine(settingsModel.cloudTarget(hasKey: { appStatus.keys[$0]?.verified ?? false }))
@@ -689,7 +688,7 @@ extension AppDelegate {
     }
 
     /// The pill card's second button: its fix (setup step or page); older cards open their Settings page.
-    fileprivate func pillFixClicked() {
+    private func pillFixClicked() {
         let f = panelModel.failure
         panelModel.phase = .idle
         NSApp.activate(ignoringOtherApps: true)
@@ -701,11 +700,11 @@ extension AppDelegate {
         showMainWindow(tab: .settings)
     }
 
-    @objc fileprivate func engineLineClicked() { nav.page = .languages; showMainWindow(tab: .settings) }
-    @objc fileprivate func hotkeyLineClicked() { openSetup(.permissions) }
+    @objc private func engineLineClicked() { nav.page = .languages; showMainWindow(tab: .settings) }
+    @objc private func hotkeyLineClicked() { openSetup(.permissions) }
 
     /// Standard app menu bar (needed for ⌘Q, ⌘, and copy/paste inside text fields), in the interface language.
-    fileprivate func buildMainMenu() {
+    private func buildMainMenu() {
         let t = strings
         let main = NSMenu()
         func sub(_ title: String) -> NSMenu { let it = NSMenuItem(); main.addItem(it); let m = NSMenu(title: title); it.submenu = m; return m }
@@ -766,7 +765,7 @@ extension AppDelegate {
     /// domain (removed after the snapshot), keys as masked fake rows. Nothing reaches the real settings or Keychain.
     /// States: en, uz-missing, uz-mac, uz-connected (v2); v3 inline Connect: home-open, langs-open, langs-fail,
     /// langs-connected; home-micoff, langs-micoff (mic and Accessibility off, whatever this Mac has granted); a "-ru" / "-uz" suffix sets the preview's interface language (the real settings are untouched).
-    fileprivate func showPreview(_ raw: String) {
+    private func showPreview(_ raw: String) {
         guard let defaults = UserDefaults(suiteName: Self.previewSuite) else { return }
         let ui: UILanguage? = raw.hasSuffix("-ru") ? .ru : (raw.hasSuffix("-uz") ? .uz : nil)
         let state = ui == nil ? raw : String(raw.dropLast(3))
@@ -822,4 +821,3 @@ extension AppDelegate {
         Log.info("preview: \(raw)")
     }
 }
-

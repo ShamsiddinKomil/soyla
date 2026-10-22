@@ -7,7 +7,7 @@ struct SetupPane: View {
     var focus: FocusState<SetupFocus?>.Binding
 
     var body: some View {
-        Group { panes }
+        panes
             .buttonStyle(.bordered)                        // secondary actions: plain push buttons; only the primary is lapis
     }
 

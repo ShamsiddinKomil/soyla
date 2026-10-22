@@ -450,5 +450,5 @@ public enum Permissions {
 
 extension HotkeyMonitor {
     /// The CLI's own tap thread when it set `runLoop`; in the app a dedicated thread, never main (see EscTapThread).
-    fileprivate var escRunLoop: CFRunLoop { runLoop ?? EscTapThread.runLoop }
+    private var escRunLoop: CFRunLoop { runLoop ?? EscTapThread.runLoop }
 }
