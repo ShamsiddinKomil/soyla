@@ -1,0 +1,39 @@
+# Small on purpose. Existing violations live in .swiftlint.baseline; only NEW ones fail.
+included:
+  - Sources
+  - Tests
+excluded:
+  - .build
+  - build
+  - dist
+  - .claude
+# Style rules the code base deliberately does not follow (dense one-line bodies, long identifiers). Naming and
+# layout are not what this config guards; safety rules are.
+disabled_rules:
+  - identifier_name
+  - type_name
+  - line_length
+  - trailing_comma
+  - implicit_optional_initialization
+  - switch_case_alignment
+  - statement_position
+  - nesting
+  - large_tuple
+opt_in_rules:
+  - force_unwrapping
+force_unwrapping:
+  severity: error
+file_length:
+  warning: 600
+  error: 1200
+custom_rules:
+  no_unchecked_sendable:
+    name: "No new @unchecked Sendable"
+    regex: '@unchecked\s+Sendable'
+    message: "Use an actor, @MainActor, or a truly Sendable type. Existing uses are baselined debt."
+    severity: error
+  no_nonisolated_unsafe:
+    name: "No new nonisolated(unsafe)"
+    regex: 'nonisolated\(unsafe\)'
+    message: "Use an actor or @MainActor. Existing uses are baselined debt."
+    severity: error

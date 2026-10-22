@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Swift version
+        id: swift
+        run: |
+          swift --version
+          echo "version=$(swift --version 2>&1 | grep -o 'Swift version [0-9.]*' | tr ' ' '-')" >> "$GITHUB_OUTPUT"
+
+      - name: Cache .build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .build
+          key: build-${{ runner.os }}-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          restore-keys: |
+            build-${{ runner.os }}-${{ steps.swift.outputs.version }}-
+
+      - name: Install lint tools
+        run: brew install swiftformat swiftlint
+
+      - name: Format check
+        run: swiftformat --lint .
+
+      - name: Lint (against baseline)
+        run: scripts/lint.sh
+
+      - name: Build (release)
+        run: swift build -c release
+
+      - name: Tests
+        run: scripts/test.sh
+
+      - name: Report-script tests
+        run: python3 -I Tests/test_report.py
+
+      - name: Bundle app (ad-hoc signed)
+        run: NO_INSTALL=1 scripts/bundle.sh
+
+      - name: Zip app
+        run: ditto -c -k --keepParent build/Soyla.app build/Soyla.zip
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Soyla-app
+          path: build/Soyla.zip
+          retention-days: 14

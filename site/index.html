@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Soyla: dictation for Uzbek, Russian and English</title>
+<meta name="description" content="Push-to-talk dictation for macOS that keeps Uzbek, Russian and English in one sentence. Hold fn, speak, release. Free, open source, your own API key.">
+<meta name="theme-color" content="#F6F7F9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15181D" media="(prefers-color-scheme: dark)">
+<meta property="og:title" content="Soyla: dictation for Uzbek, Russian and English">
+<meta property="og:description" content="Push-to-talk dictation for macOS that keeps Uzbek, Russian and English in one sentence.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://shamsiddinkomil.github.io/soyla/">
+<meta property="og:image" content="https://shamsiddinkomil.github.io/soyla/media/social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<style>
+:root{--paper:#F6F7F9;--sheet:#FFFFFF;--well:#EEF0F3;--ink:#1A2230;--ink2:rgba(26,34,48,.68);--ink3:rgba(26,34,48,.62);--line:rgba(0,0,0,.08);--line2:rgba(0,0,0,.14);--lazur:#2A5BD7;--on-lazur:#fff;--signal:#E0443E;--raised:#fff}
+@media(prefers-color-scheme:dark){:root{--paper:#15181D;--sheet:#1C2027;--well:#11141A;--ink:#E8EBF0;--ink2:rgba(232,235,240,.72);--ink3:rgba(232,235,240,.62);--line:rgba(255,255,255,.09);--line2:rgba(255,255,255,.16);--lazur:#7A9BFF;--on-lazur:#15181D;--signal:#FF6B66;--raised:#262B34}}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.55 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",system-ui,sans-serif;overflow-wrap:break-word}
+a{color:var(--lazur)}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--lazur);outline-offset:2px;border-radius:6px}
+.wrap{max-width:880px;margin:0 auto;padding:0 24px}
+section{padding:40px 0 0}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.4px;line-height:1.2}
+h1{font-size:clamp(34px,7vw,52px);letter-spacing:-1px}
+h2{font-size:22px;margin-bottom:16px}
+h3{font-size:16px;letter-spacing:0;margin-bottom:4px}
+p{margin:0}
+.muted{color:var(--ink2)}
+.small{font-size:13px;color:var(--ink3)}
+header.wrap{display:flex;align-items:center;gap:10px;padding-top:24px;padding-bottom:0}
+header img{width:32px;height:32px;display:block}
+header b{font-weight:600;font-size:17px}
+.hero{padding-top:48px}
+.lead{font-size:clamp(18px,3.4vw,22px);line-height:1.4;color:var(--ink2);margin-top:16px;max-width:36em}
+.note{margin:32px 0 0;max-width:520px;background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
+.meta{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--ink3);margin-bottom:6px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--signal);flex:none}
+.note p{font-size:15px;line-height:1.65}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:32px}
+.btn{display:inline-block;padding:10px 20px;border-radius:6px;font-weight:600;text-decoration:none;border:1px solid var(--line2);color:var(--ink);background:var(--sheet)}
+.btn.p{background:var(--lazur);border-color:var(--lazur);color:var(--on-lazur)}
+.btn:hover{filter:brightness(.95)}
+.cta+p{margin-top:16px}
+picture,figure{display:block;margin:0}
+.shot{margin-top:40px}
+.shot img,.tour img{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--line2)}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(3,1fr);margin:0;padding:0;list-style:none}
+.card{background:var(--sheet);border:1px solid var(--line);border-radius:10px;padding:16px}
+.card p{font-size:14px;color:var(--ink2)}
+.steps{counter-reset:s}
+.steps .card{position:relative}
+.steps .card:before{counter-increment:s;content:counter(s);display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--well);border:1px solid var(--line2);font-size:12px;font-weight:600;margin-bottom:8px}
+kbd{font:600 12px ui-rounded,"SF Pro Rounded",-apple-system,system-ui,sans-serif;background:var(--raised);border:1px solid var(--line2);border-bottom-width:2px;border-radius:6px;padding:1px 7px}
+ul.plain{margin:0;padding:0;list-style:none;background:var(--sheet);border:1px solid var(--line);border-radius:10px}
+ul.plain li{padding:12px 16px;border-top:1px solid var(--line);font-size:15px}
+ul.plain li:first-child{border-top:0}
+ul.plain b{font-weight:600}
+.tour{margin-top:16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+footer.wrap{width:calc(100% - 48px);max-width:832px;padding-left:0;padding-right:0;margin-top:56px;padding-top:24px;padding-bottom:40px;border-top:1px solid var(--line);font-size:13px;color:var(--ink3)}
+footer p+p{margin-top:8px}
+footer a{margin-right:12px;white-space:nowrap}
+@media(max-width:700px){.grid{grid-template-columns:1fr}.hero{padding-top:32px}}
+</style>
+</head>
+<body>
+<header class="wrap"><img src="favicon.svg" alt="" width="32" height="32"><b>Soyla</b></header>
+<main class="wrap">
+<section class="hero">
+<h1>Soyla</h1>
+<p class="lead">Push-to-talk dictation for macOS that keeps Uzbek, Russian and English in one sentence.</p>
+<figure class="note" aria-label="Example dictation">
+<div class="meta"><span class="dot" aria-hidden="true"></span><span>You said</span></div>
+<p lang="uz">Kecha mijoz bilan gaplashdim, <span lang="ru">но есть один нюанс…</span></p>
+</figure>
+<div class="cta">
+<a class="btn p" href="https://github.com/ShamsiddinKomil/soyla/releases/latest">Download</a>
+<a class="btn" href="https://github.com/ShamsiddinKomil/soyla">View on GitHub</a>
+</div>
+<p class="small">Free and open source · macOS 14+ · Apple silicon</p>
+<picture class="shot">
+<source srcset="media/home-dark.png" media="(prefers-color-scheme: dark)">
+<img src="media/home.png" width="1056" height="760" alt="Soyla's Home page: the fn key, your three languages ready, and the last dictation">
+</picture>
+</section>
+
+<section>
+<h2>Why Soyla</h2>
+<ul class="grid">
+<li class="card"><h3>Code-switching is the point</h3><p>Most dictation apps pick one language per recording. Soyla sends your audio to a general-purpose model with a prompt built for mixed Uzbek, Russian and English speech. On a 41-second clip that switches languages mid-sentence, the default setup kept both scripts in 7 of 7 runs.</p></li>
+<li class="card"><h3>Your key, your data</h3><p>There is no Soyla account and no Soyla server. Audio goes from your Mac straight to the provider you choose, with your own API key. Nothing is sent to the author.</p></li>
+<li class="card"><h3>Built and measured in the open</h3><p>Every dictation is logged locally with a full latency timeline. The replay tool re-sends the same recording to other models, so comparisons use identical audio.</p></li>
+</ul>
+</section>
+
+<section>
+<h2>How it works</h2>
+<ol class="grid steps" style="margin:0;padding:0;list-style:none">
+<li class="card"><h3>Hold <kbd>fn</kbd></h3><p>Click into any text field and hold the key.</p></li>
+<li class="card"><h3>Speak</h3><p>Talk the way you actually talk. Uzbek in Latin, Russian in Cyrillic, no language switch to flip.</p></li>
+<li class="card"><h3>Release</h3><p>The text lands where your cursor is. Median 2.3 s from release to pasted text.</p></li>
+</ol>
+</section>
+
+<section>
+<h2>Privacy</h2>
+<ul class="plain">
+<li><b>No account.</b> Nothing to sign up for.</li>
+<li><b>No Soyla server.</b> Audio goes from your Mac to the provider you choose.</li>
+<li><b>Your own key.</b> OpenRouter or Google AI Studio, saved in your Mac's Keychain.</li>
+<li><b>No telemetry.</b> Soyla never looks at your screen.</li>
+</ul>
+</section>
+
+<section>
+<h2>Inside the app</h2>
+<p class="muted">Settings are pages of plain rows, each with one line on what it does.</p>
+<div class="tour"><img src="media/page-dictation.png" loading="lazy" width="1056" height="743" alt="Settings, Dictation: the language you mainly speak, the correction pass, sounds, replacements and spelling"><img src="media/page-privacy.png" loading="lazy" width="1056" height="941" alt="Settings, Privacy and data: where each language goes, how long recordings are kept, the microphone, opening at login"></div>
+</section>
+
+<section>
+<h2>Known limits</h2>
+<ul class="plain">
+<li><b>Not signed by Apple yet,</b> so the first open of each version takes the Open Anyway detour.</li>
+<li><b>Online only.</b> No model runs on the Mac; offline dictations are kept and retried later.</li>
+<li><b>fn is an Apple-keyboard key.</b> On other keyboards pick another hotkey in Settings.</li>
+<li><b>Gemini free tier trains on your audio.</b> Use OpenRouter or a paid key for anything confidential.</li>
+</ul>
+</section>
+</main>
+
+<footer class="wrap">
+<p><a href="https://github.com/ShamsiddinKomil/soyla/blob/main/docs/INSTALL.md">Install guide</a><a href="https://github.com/ShamsiddinKomil/soyla/blob/main/docs/KEYS.md">API keys</a><a href="https://github.com/ShamsiddinKomil/soyla/blob/main/docs/PRIVACY_AND_COST.md">Privacy and cost</a><a href="https://github.com/ShamsiddinKomil/soyla">GitHub</a></p>
+<p>MIT, © Shamsiddin Komil. Soyla ("speak" in Uzbek) is built in Tashkent.</p>
+</footer>
+</body>
+</html>

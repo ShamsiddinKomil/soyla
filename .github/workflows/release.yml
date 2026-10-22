@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Swift version
+        run: swift --version
+
+      - name: Pre-launch checks
+        run: scripts/prelaunch_check.sh "${GITHUB_REF_NAME}"
+
+      - name: Tests
+        run: scripts/test.sh
+
+      - name: Report-script tests
+        run: python3 -I Tests/test_report.py
+
+      # Publishing happens on the owner's Mac (scripts/release.sh): the signing certificate never leaves it, and the
+      # in-app updater only accepts builds signed with it. CI only proves the tag builds.
+      - name: Build check
+        run: NO_INSTALL=1 SOYLA_ADHOC=1 scripts/bundle.sh

@@ -1,0 +1,4 @@
+# The maintainer reviews everything; the two files with hard-won fixes are called out on purpose.
+*                                         @ShamsiddinKomil
+/Sources/SoylaCore/Audio/Recorder.swift   @ShamsiddinKomil
+/Sources/SoylaCore/Hotkey/HotkeyMonitor.swift @ShamsiddinKomil

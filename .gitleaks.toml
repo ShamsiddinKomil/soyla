@@ -1,0 +1,8 @@
+# gitleaks config: the default rules plus one narrow allowance.
+# Run: gitleaks dir --config .gitleaks.toml .   (also run by scripts/prelaunch_check.sh when gitleaks is installed)
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Settings migration flag names (\"migrated.<step>\") look like keys to the generic rule; they are not secrets"
+regexes = ['''^migrated\.[A-Za-z0-9]+$''']

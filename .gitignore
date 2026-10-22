@@ -1,0 +1,21 @@
+# secrets
+.env
+.env.*
+!.env.example
+# local data
+recordings/
+logs/
+# build
+.build/
+build/
+*.app
+.DS_Store
+# editor backups
+*.swp
+*.save
+*~
+.claude/settings.local.json
+.claude/worktrees/
+# private research (never commit)
+research/
+dist/

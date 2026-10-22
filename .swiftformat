@@ -1,0 +1,6 @@
+--swiftversion 6.0
+--indent 4
+--maxwidth 120
+--exclude .build,build,dist,.claude
+# The code base uses dense one-line bodies and aligned columns; keep that. Only mechanical hygiene rules are on.
+--disable wrap,wrapIfStatementBodies,wrapFunctionBodies,wrapPropertyBodies,wrapLoopBodies,wrapIfExpressionBodies,wrapMultilineStatementBraces,wrapSingleLineComments,wrapArguments,wrapAttributes,wrapEnumCases,wrapSwitchCases,wrapConditionalBodies,consecutiveSpaces,redundantReturn,blankLinesBetweenScopes,spaceAroundOperators,braces,numberFormatting,noForceUnwrapInTests,hoistPatternLet,redundantSwiftTestingSuite,docComments,redundantSelf,hoistTry,hoistAwait,elseOnSameLine,andOperator,conditionalAssignment,trailingCommas,unusedArguments,redundantNilInit,preferKeyPath,modifierOrder,redundantClosure,consistentSwitchCaseSpacing,blankLinesAroundMark,redundantType,redundantParens,redundantMemberwiseInit,initCoderUnavailable,extensionAccessControl,redundantViewBuilder,redundantPattern,redundantAsync,opaqueGenericParameters,emptyBraces,blankLineAfterImports,sortImports,trailingClosures,indent,environmentEntry

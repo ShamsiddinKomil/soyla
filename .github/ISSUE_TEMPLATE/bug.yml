@@ -1,0 +1,76 @@
+name: Bug report
+description: Something does not work (text not pasted, hotkey ignored, wrong text, crash)
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Paste problems are the most common issue in dictation apps, so the fields below matter.
+        Please do not paste API keys, and avoid pasting private dictated text.
+  - type: input
+    id: version
+    attributes:
+      label: Soyla version
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "15.2"
+    validations:
+      required: true
+  - type: input
+    id: hotkey
+    attributes:
+      label: Hotkey in use
+      placeholder: "fn (hold)"
+    validations:
+      required: true
+  - type: input
+    id: layout
+    attributes:
+      label: Keyboard layout
+      description: Dvorak and non-US layouts affect paste.
+      placeholder: "US, Dvorak, Russian..."
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: Target app (where text should appear)
+      placeholder: "Safari, Slack, Terminal, VS Code..."
+    validations:
+      required: true
+  - type: input
+    id: mic
+    attributes:
+      label: Microphone device
+      placeholder: "MacBook Pro microphone, AirPods..."
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - OpenRouter
+        - Google AI Studio (direct)
+        - OpenAI-compatible endpoint
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+  - type: textarea
+    id: log
+    attributes:
+      label: Log excerpt (optional)
+      description: "Settings → Developer → Open logs, or `~/Library/Application Support/Soyla/app.log`. It holds timings and error classes only, never dictated text. Check it before pasting."
+      render: text

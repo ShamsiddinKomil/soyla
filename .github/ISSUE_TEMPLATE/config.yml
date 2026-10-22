@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Something isn't working? Start here
+    url: https://github.com/ShamsiddinKomil/soyla/blob/main/docs/TROUBLESHOOTING.md
+    about: Nothing pastes, the hotkey does nothing, "No audio", a rejected key. Most fixes are one toggle.
+  - name: Questions and ideas
+    url: https://github.com/ShamsiddinKomil/soyla/discussions
+    about: How do I…, which model, what does it cost. Ask here instead of opening an issue.
+  - name: Report a security problem privately
+    url: https://github.com/ShamsiddinKomil/soyla/security/advisories/new
+    about: Please don't open a public issue for anything that could expose keys, audio or text.

@@ -1,0 +1,3 @@
+# Nested config: tests may force-unwrap.
+disabled_rules:
+  - force_unwrapping
