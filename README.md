@@ -23,20 +23,19 @@
 
 Hold a key, speak the way you actually talk ("Kecha mijoz bilan gaplashdim, но есть один нюанс…"), let go. The text lands where your cursor is: Uzbek in Latin, Russian in Cyrillic, with no language switch to flip.
 
-## Early access
+## Install
 
-You're here because you were invited: Soyla is in a private preview before it goes public. Thank you for trying it.
+```
+brew install --cask ShamsiddinKomil/soyla/soyla
+```
 
-- **Please keep it to yourself for now.** Don't forward the repository or the download. If someone wants in, point them to the author and they'll be added.
-- **Use it for real for a week.** Your normal messages and notes, mixed sentences included, in the apps you actually use. Try a long dictation (a minute or more) and, if you have them, AirPods as well as the built-in microphone.
-- **What helps most:**
-  - **Wrong words or wrong script:** what you said and what was pasted, only if you're comfortable sharing the text.
-  - **Setup:** any step where you hesitated or weren't sure what to do.
-  - **Paste:** an app where the text didn't arrive.
-  - **Speed:** whether the wait after you let go feels short enough.
-- **How to send it:** [open an issue](https://github.com/ShamsiddinKomil/soyla/issues/new/choose) (Bug or Idea). In the app, **Report a Problem…** in the menu bar icon fills in your setup for you, without your dictated text, audio or keys. A two-line note is plenty; screenshots help.
-- **Issues are visible to the other testers**, so leave out anything private. For something you'd rather not post, follow [SECURITY.md](SECURITY.md) or contact the author directly.
-- **Expect rough edges:** each new version needs the one-time Open Anyway step (see Quick start), and things will change between versions.
+Or [download the zip](https://github.com/ShamsiddinKomil/soyla/releases/latest) from Releases, the only official source. Needs macOS 14 or newer on Apple silicon (Intel is untested). The first open of each version needs **Open Anyway** once ([why](docs/INSTALL.md)); then [Quick start](#quick-start) walks you through setup.
+
+## Feedback
+
+- **Report a bug or idea:** [open an issue](https://github.com/ShamsiddinKomil/soyla/issues/new/choose). In the app, **Report a Problem…** in the menu bar icon fills in your setup for you, without your dictated text, audio or keys. A two-line note is plenty; screenshots help.
+- **What helps most:** wrong words or the wrong script (what you said and what was pasted, only if you're comfortable sharing the text), a setup step where you hesitated, an app where the text didn't arrive, and whether the wait after you let go feels short enough.
+- **Issues are public**, so leave out anything private. For a security problem, follow [SECURITY.md](SECURITY.md).
 
 ## Features
 
@@ -82,13 +81,7 @@ You're here because you were invited: Soyla is in a private preview before it go
 
 Needs **macOS 14 or newer** on Apple silicon (Intel is untested). English can run free on the Mac; Uzbek, Russian and mixed speech need an API key from OpenRouter or Google AI Studio.
 
-1. **Install.** With [Homebrew](https://brew.sh):
-
-   ```
-   brew install --cask ShamsiddinKomil/soyla/soyla
-   ```
-
-   Or download `Soyla-vX.Y.Z.zip` from [Releases](https://github.com/ShamsiddinKomil/soyla/releases/latest) (the only official source), unzip it and drag `Soyla.app` to Applications.
+1. **Install** with the [Homebrew line above](#install), or download `Soyla-vX.Y.Z.zip` from [Releases](https://github.com/ShamsiddinKomil/soyla/releases/latest) (the only official source), unzip it and drag `Soyla.app` to Applications.
 2. **Open it once with Open Anyway.** macOS says it cannot verify the app: click **Done**, then System Settings → Privacy & Security → **Open Anyway**. Once per version ([why](docs/INSTALL.md)).
 3. **Follow the Setup Assistant** (about two minutes): pick your languages, allow the microphone and Accessibility, connect a key if you chose Uzbek or Russian, and try one sentence.
 4. **For Uzbek or Russian, connect a key.** [OpenRouter](https://openrouter.ai/keys) is recommended for mixed speech (add $5 of credit; about half a cent per 40 seconds). [Google AI Studio](https://aistudio.google.com/apikey) has a free tier but is reliable for one language at a time, and free-tier audio may be used by Google. Step by step: [docs/KEYS.md](docs/KEYS.md).
