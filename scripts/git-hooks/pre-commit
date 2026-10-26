@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Install once per clone: git config core.hooksPath scripts/git-hooks
-# Format check + lint on staged Swift files, then the full test suite. Any non-zero rc blocks the commit.
+# Format check + lint on staged Swift files, then the full test suite when Sources/, Tests/ or Package.swift is
+# staged. Any non-zero rc blocks the commit.
 set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
 files=()
@@ -13,6 +14,8 @@ if [ "${#files[@]}" -gt 0 ]; then
     scripts/lint.sh lint --quiet --baseline .swiftlint.baseline "${app[@]}" || { echo "pre-commit: swiftlint failed" >&2; exit 1; }
   fi
 fi
+# Tests only when code is staged (owner D17, 2026-10-25): a docs-only commit can't break them. Deletions count too.
+if [ -z "$(git diff --cached --name-only -- Sources Tests Package.swift)" ]; then exit 0; fi
 log=$(mktemp); trap 'rm -f "$log"' EXIT
 scripts/test.sh > "$log" 2>&1; rc=$?
 if [ "$rc" -ne 0 ]; then echo "pre-commit: scripts/test.sh failed (rc=$rc). Last lines:" >&2; tail -30 "$log" >&2; exit 1; fi

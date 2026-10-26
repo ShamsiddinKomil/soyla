@@ -29,9 +29,8 @@ struct AppDStrings: Sendable {
     let pcDismiss, pcHide1h, pcResetPos, pcBusy, anRecording, anTranscribing: String
     let keyA11y: @Sendable (String) -> String                            // VoiceOver: "fn key"
     let keyHeld: String
-    let pcIdle, pcReady, pcLockedHint: @Sendable (String) -> String      // the hotkey's label
+    let pcIdle, pcReady: @Sendable (String) -> String      // the hotkey's label
     let pcLeft: @Sendable (Int) -> String
-    let pcLocked: @Sendable (String) -> String                           // the "N s left" text
 
     // Report a Problem
     let rpTitle, rpIntro, rpNote, rpOpen, rpOpenH: String
@@ -51,6 +50,9 @@ struct AppDStrings: Sendable {
     let kcPasteH, kcStep2, kpEmpty, kpSpaces: String
     let kcAsking, kcA11y: @Sendable (String) -> String
     let kcRefused: @Sendable (String) -> String
+
+    // D26 (c): Raw (the old Off), the fallback note, the History badge
+    let rsRawC, rsSkipped, rsBadgeH: String
 
     // Free engine status (EngineCopy) and the switch offer (EngineSwitchPrompt)
     let ecChecking, ecReady, ecDlFailed, ecNeedsDl, ecNeedsPerm, ecNoLocale, ecNoModel, ecRestricted, ecSlotsFull, ecOsOld: String
@@ -127,7 +129,7 @@ extension AppDStrings {
         pcDismiss: "Dismiss", pcHide1h: "Hide for 1 hour", pcResetPos: "Reset position",
         pcBusy: "Still working on your last dictation", anRecording: "Recording", anTranscribing: "Transcribing",
         keyA11y: { "\($0) key" }, keyHeld: "held", pcIdle: { "Hold \($0) to dictate" }, pcReady: { "Ready — hold \($0) to dictate" },
-        pcLockedHint: { "Locked · press \($0) or click to finish" }, pcLeft: { "\($0) s left" }, pcLocked: { "Locked · \($0)" },
+        pcLeft: { "\($0) s left" },
         rpTitle: "Report a problem",
         rpIntro: "This is everything the report contains. Edit or delete any line. It has no dictated text, no audio and no API keys.",
         rpNote: "Nothing is sent from here. “Open GitHub issue” opens your browser with this text filled in; you read it there and press Submit yourself.",
@@ -152,16 +154,19 @@ extension AppDStrings {
         sfNotWritable: "Soyla can’t replace itself in this folder. Download the new version from the release page.",
         sfInstall: "The update couldn’t be installed. Your current version is unchanged.",
         ceBase: "Base URL", ceBaseC: "{base}/chat/completions · https (http for localhost)", ceAny: "Any OpenAI-compatible server",
-        ceEnv: { "Using the key from \($0 ? "an environment variable" : ".env.local (dev)"); it wins over the Keychain." },
+        ceEnv: { "Using the key from \($0 ? "an environment variable" : ".env.local (dev)"); it wins over the saved key." },
         kcEmpty: "Not connected", kcSaved: "Saved", kcUsed: "Used for dictation", kcOptional: "Optional",
         kcWorks: "Soyla can transcribe with this key.", kcMore: "More", kcReplaceKey: "Replace key…", kcCheckAgain: "Check again",
         kcUse: "Use for dictation", kcPaste: "Paste key", kcType: "Type it instead", kcSave: "Save", kcField: "Type or paste the key",
-        kcPasteH: "Reads the key from the clipboard, saves it in the Keychain, then clears the clipboard",
+        kcPasteH: "Reads the key from the clipboard, saves it on this Mac, then clears the clipboard",
         kcStep2: "Come back here and paste it. Soyla checks it right away.",
         kpEmpty: "The clipboard is empty. Copy the key first, then press Paste key.",
         kpSpaces: "That isn’t a key: the clipboard holds text with spaces. Copy just the key.",
         kcAsking: { "Asking \($0) whether the key works. This takes a second." }, kcA11y: { "\($0) API key" },
         kcRefused: { "\($0) refused this key. It may be incomplete, revoked, or from another account. Copy it again and paste it here." },
+        rsRawC: "What the speech model heard, plus your dictionary. Long filler sounds like “mmm” are still removed.",
+        rsSkipped: "Pasted as heard (cleanup skipped)",
+        rsBadgeH: "Changed after transcription. Struck-through words were removed; highlighted words were added or changed.",
         ecChecking: "Checking…", ecReady: "Ready", ecDlFailed: "The download didn’t finish. Check your connection and retry.",
         ecNeedsDl: "Needs a one-time download (internet)", ecNeedsPerm: "Needs Speech Recognition permission",
         ecNoLocale: "Not available: this Mac has no on-device English model",
@@ -207,8 +212,7 @@ extension AppDStrings {
         pcResetPos: "Joylashuvni tiklash", pcBusy: "Oxirgi diktovka hali ishlanmoqda",
         anRecording: "Yozilmoqda", anTranscribing: "Matnga aylantirilmoqda",
         keyA11y: { "\($0) tugmasi" }, keyHeld: "bosilgan", pcIdle: { "Gapirish uchun \($0)’ni bosib turing" }, pcReady: { "Tayyor: gapirish uchun \($0)’ni bosib turing" },
-        pcLockedHint: { "Qulflandi · tugatish uchun \($0)’ni yoki indikatorni bosing" }, pcLeft: { "\($0) s qoldi" },
-        pcLocked: { "Qulflandi · \($0)" },
+        pcLeft: { "\($0) s qoldi" },
         rpTitle: "Muammo haqida xabar berish",
         rpIntro: "Hisobotda faqat shu ma’lumotlar bor. Istalgan qatorni tahrirlang yoki o‘chiring. Unda diktovka matni, ovoz va API key’lar yo‘q.",
         rpNote: "Bu yerdan hech narsa yuborilmaydi. «GitHub issue’ni ochish» brauzeringizni shu matn bilan ochadi; uni o‘sha yerda o‘qib, Submit’ni o‘zingiz bosasiz.",
@@ -235,17 +239,20 @@ extension AppDStrings {
         sfInstall: "Yangilanishni o‘rnatib bo‘lmadi. Hozirgi versiyangiz o‘zgarmadi.",
         ceBase: "Base URL", ceBaseC: "{base}/chat/completions · https (localhost uchun http)",
         ceAny: "OpenAI bilan mos istalgan server",
-        ceEnv: { "\($0 ? "Environment variable" : ".env.local (dev)")’dagi API key ishlatilmoqda; u Keychain’dan ustun turadi." },
+        ceEnv: { "\($0 ? "Environment variable" : ".env.local (dev)")’dagi API key ishlatilmoqda; u saqlangan API key’dan ustun turadi." },
         kcEmpty: "Ulanmagan", kcSaved: "Saqlandi", kcUsed: "Diktovka uchun ishlatiladi", kcOptional: "Ixtiyoriy",
         kcWorks: "Soyla shu API key bilan matnga aylantira oladi.", kcMore: "Yana", kcReplaceKey: "API key’ni almashtirish…",
         kcCheckAgain: "Qayta tekshirish", kcUse: "Diktovka uchun ishlatish", kcPaste: "API key’ni qo‘yish",
         kcType: "Qo‘lda kiritish", kcSave: "Saqlash", kcField: "API key’ni yozing yoki qo‘ying",
-        kcPasteH: "API key’ni clipboard’dan o‘qiydi, Keychain’ga saqlaydi va clipboard’ni tozalaydi",
+        kcPasteH: "API key’ni clipboard’dan o‘qiydi, shu Mac’da saqlaydi va clipboard’ni tozalaydi",
         kcStep2: "Shu yerga qaytib, uni qo‘ying. Soyla darhol tekshiradi.",
         kpEmpty: "Clipboard bo‘sh. Avval API key’dan nusxa oling, so‘ng «API key’ni qo‘yish»ni bosing.",
         kpSpaces: "Bu API key emas: clipboard’da bo‘shliqli matn bor. Faqat API key’ni nusxalang.",
         kcAsking: { "API key ishlashi \($0)dan so‘ralmoqda. Bu bir soniya oladi." }, kcA11y: { "\($0) uchun API key" },
         kcRefused: { "\($0) bu API key’ni qabul qilmadi. U to‘liq emas, bekor qilingan yoki boshqa hisobniki bo‘lishi mumkin. Uni qayta nusxalab, shu yerga qo‘ying." },
+        rsRawC: "Nutq modeli eshitgani va lug‘atingiz. “mmm” kabi uzun to‘ldiruvchi tovushlar baribir olib tashlanadi.",
+        rsSkipped: "Eshitilganicha qo‘yildi (tuzatish o‘tkazib yuborildi)",
+        rsBadgeH: "Yozib olingandan keyin o‘zgartirilgan. Ustiga chizilgan so‘zlar olib tashlangan; ajratilgan so‘zlar qo‘shilgan yoki o‘zgargan.",
         ecChecking: "Tekshirilmoqda…", ecReady: "Ishlaydi", ecDlFailed: "Yuklab olish tugamadi. Internetni tekshirib, qayta urinib ko‘ring.",
         ecNeedsDl: "Bir martalik yuklab olish kerak (internet)", ecNeedsPerm: "Speech Recognition ruxsati kerak",
         ecNoLocale: "Mavjud emas: bu Mac’da ingliz tili modeli yo‘q",
@@ -291,8 +298,7 @@ extension AppDStrings {
         pcDismiss: "Закрыть", pcHide1h: "Скрыть на 1 час", pcResetPos: "Сбросить положение",
         pcBusy: "Предыдущая диктовка ещё в работе", anRecording: "Идёт запись", anTranscribing: "Расшифровка",
         keyA11y: { "клавиша \($0)" }, keyHeld: "зажата", pcIdle: { "Зажмите \($0), чтобы диктовать" }, pcReady: { "Готово: зажмите \($0), чтобы диктовать" },
-        pcLockedHint: { "Зафиксировано · нажмите \($0) или кликните, чтобы закончить" }, pcLeft: { "осталось \($0) с" },
-        pcLocked: { "Зафиксировано · \($0)" },
+        pcLeft: { "осталось \($0) с" },
         rpTitle: "Сообщить о проблеме",
         rpIntro: "Это всё, что войдёт в отчёт. Любую строку можно изменить или удалить. В нём нет надиктованного текста, звука и API-ключей.",
         rpNote: "Отсюда ничего не отправляется. «Открыть GitHub issue» откроет браузер с этим текстом; вы прочитаете его там и сами нажмёте Submit.",
@@ -319,17 +325,20 @@ extension AppDStrings {
         sfInstall: "Не удалось установить обновление. Текущая версия не изменилась.",
         ceBase: "Base URL", ceBaseC: "{base}/chat/completions · https (для localhost http)",
         ceAny: "Любой OpenAI-совместимый сервер",
-        ceEnv: { "Используется ключ из \($0 ? "переменной окружения" : ".env.local (dev)"); он главнее Keychain." },
+        ceEnv: { "Используется ключ из \($0 ? "переменной окружения" : ".env.local (dev)"); он главнее сохранённого ключа." },
         kcEmpty: "Не подключено", kcSaved: "Сохранён", kcUsed: "Используется для диктовки", kcOptional: "Необязательно",
         kcWorks: "Soyla может распознавать речь с этим ключом.", kcMore: "Ещё", kcReplaceKey: "Заменить ключ…",
         kcCheckAgain: "Проверить снова", kcUse: "Использовать для диктовки", kcPaste: "Вставить ключ",
         kcType: "Ввести вручную", kcSave: "Сохранить", kcField: "Введите или вставьте ключ",
-        kcPasteH: "Читает ключ из буфера обмена, сохраняет в Keychain и очищает буфер",
+        kcPasteH: "Читает ключ из буфера обмена, сохраняет на этом Mac и очищает буфер",
         kcStep2: "Вернитесь сюда и вставьте его. Soyla сразу проверит.",
         kpEmpty: "Буфер обмена пуст. Сначала скопируйте ключ, затем нажмите «Вставить ключ».",
         kpSpaces: "Это не ключ: в буфере обмена текст с пробелами. Скопируйте только ключ.",
         kcAsking: { "Спрашиваем \($0), работает ли ключ. Это займёт секунду." }, kcA11y: { "API-ключ \($0)" },
         kcRefused: { "\($0) отклонил этот ключ. Он может быть неполным, отозванным или от другого аккаунта. Скопируйте его снова и вставьте сюда." },
+        rsRawC: "То, что услышала модель распознавания, плюс ваш словарь. Долгие звуки-паразиты вроде «ммм» всё равно убираются.",
+        rsSkipped: "Вставлено как услышано (коррекция пропущена)",
+        rsBadgeH: "Изменено после распознавания. Зачёркнутые слова убраны; выделенные добавлены или изменены.",
         ecChecking: "Проверяем…", ecReady: "Работает", ecDlFailed: "Загрузка не завершилась. Проверьте интернет и повторите.",
         ecNeedsDl: "Нужна разовая загрузка (интернет)", ecNeedsPerm: "Нужно разрешение Speech Recognition",
         ecNoLocale: "Недоступно: на этом Mac нет английской модели",

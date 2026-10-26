@@ -24,8 +24,8 @@ if command -v gitleaks >/dev/null; then
   rm -rf "$t"
 fi
 
-# 2. No real home paths (`/Users/<name>`); the tests' `/Users/fake` is fine.
-paths=$(git grep -nIE '/Users/[A-Za-z0-9._-]+' -- ':!scripts/prelaunch_check.sh' | grep -vi '/Users/fake' || true)
+# 2. No real home paths (`/Users/<name>`); the tests' `/Users/fake` and `/Users/test` fixtures are fine.
+paths=$(git grep -nIE '/Users/[A-Za-z0-9._-]+' -- ':!scripts/prelaunch_check.sh' | grep -viE '/Users/fake|/Users/test"' || true)
 if [ -n "$paths" ]; then bad "absolute /Users/ paths: $(echo "$paths" | cut -d: -f1 | sort -u | tr '\n' ' ')"; else ok "no /Users/ paths in public files"; fi
 
 # 2b. Commit emails become public with the first push. Warn only: rewriting history is the owner's decision.

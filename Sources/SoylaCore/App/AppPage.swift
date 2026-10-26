@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // APP-1 (c): the shell every Settings page shares at the app scale (docs/DESIGN.md "Main window"): a title (with an
@@ -5,32 +6,50 @@ import SwiftUI
 
 typealias InfoText = (label: String, paragraphs: [String])
 
+enum AppPageLayout {
+    /// D24 / R-14: with legacy scroll bars (a mouse attached) the scroller takes its width from the content, so a page
+    /// that scrolls gives that width back from its right margin and its groups end where the other pages' do.
+    static func scrollTrailing(side: CGFloat, legacy: Bool, scroller: CGFloat) -> CGFloat { legacy ? side - scroller : side }
+    /// The right margin of a page inside its ScrollView, for the scroller style in use now.
+    @MainActor static var scrollTrailing: CGFloat {
+        scrollTrailing(side: Ink.appPaneSide, legacy: NSScroller.preferredScrollerStyle == .legacy,
+                       scroller: NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy))
+    }
+}
+
 struct AppPage<Content: View>: View {
     let title: String
     var sub: String? = nil
     var info: InfoText? = nil
     @ViewBuilder var content: Content
 
+    @State private var legacyScrollers = NSScroller.preferredScrollerStyle == .legacy
+
     /// Unscrolled whenever it fits (also what `--snapshot` can draw); a scroll view only when it doesn't.
     var body: some View {
         ViewThatFits(in: .vertical) {
-            inner
-            ScrollView { inner }
+            inner()
+            ScrollView {
+                inner(trailing: legacyScrollers ? AppPageLayout.scrollTrailing : Ink.appPaneSide)
+            }
         }
         .tint(nil)      // secondary buttons stay neutral; switches and the primary set their own lazur
+        .onReceive(NotificationCenter.default.publisher(for: NSScroller.preferredScrollerStyleDidChangeNotification)) { _ in
+            legacyScrollers = NSScroller.preferredScrollerStyle == .legacy
+        }
     }
 
-    private var inner: some View {
+    private func inner(trailing: CGFloat = Ink.appPaneSide) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(title).font(Ink.Font.appTitle).tracking(-0.74).foregroundStyle(Ink.text).accessibilityAddTraits(.isHeader)
-                if let info { InfoButton(label: info.label, paragraphs: info.paragraphs, width: 320) }
+                if let info { InfoButton(label: AppStrings.current.about(info.label), paragraphs: info.paragraphs, width: 320) }
             }
             if let sub { Text(sub).font(Ink.Font.appSub).foregroundStyle(Ink.text2).padding(.top, 10) }
             VStack(alignment: .leading, spacing: 32) { content }.padding(.top, 36)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, Ink.appPaneTop).padding(.horizontal, Ink.appPaneSide).padding(.bottom, Ink.appPaneBottom)
+        .padding(.top, Ink.appPaneTop).padding(.leading, Ink.appPaneSide).padding(.trailing, trailing).padding(.bottom, Ink.appPaneBottom)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
@@ -47,7 +66,7 @@ struct AppSection<Content: View>: View {
             if title != nil || status != nil {
                 HStack(spacing: 8) {
                     if let title { Text(title).font(Ink.Font.appSection).foregroundStyle(Ink.text).accessibilityAddTraits(.isHeader) }
-                    if let info { InfoButton(label: info.label, paragraphs: info.paragraphs, width: 320, size: SetupScale.type(13)) }
+                    if let info { InfoButton(label: AppStrings.current.about(info.label), paragraphs: info.paragraphs, width: 320, size: SetupScale.type(13)) }
                     Spacer(minLength: 12)
                     if let status { SetupState(color: status.color, text: status.text, font: Ink.Font.appCaption) }
                 }
@@ -77,7 +96,7 @@ struct AppRow<Control: View>: View {
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 6) {
                         Text(label).font(Ink.Font.appLabel).foregroundStyle(Ink.text)
-                        if let info { InfoButton(label: info.label, paragraphs: info.paragraphs, width: 320, size: SetupScale.type(12)) }
+                        if let info { InfoButton(label: AppStrings.current.about(info.label), paragraphs: info.paragraphs, width: 320, size: SetupScale.type(12)) }
                     }
                     if let caption { Text(caption).font(Ink.Font.appCaption).foregroundStyle(Ink.text2).lineLimit(1) }
                 }

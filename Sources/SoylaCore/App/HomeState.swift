@@ -12,14 +12,17 @@ public enum Readiness: Equatable, Sendable {
     case blocked(mic: Bool, ax: Bool)
     /// Soyla works except for a key: `combo` = the cloud languages still waiting (nil = no cloud language chosen);
     /// `englishWorks` = English dictates now (false when the engine in use is a hosted service with no key).
-    case needsKey(CloudCombo?, englishWorks: Bool)
+    /// `englishWaits` = English is chosen and waits for that key too (D22: the copy then says "Soyla needs an API key").
+    case needsKey(CloudCombo?, englishWorks: Bool, englishWaits: Bool = false)
     case ready
 
     /// `englishChosen`: English is one of the user's languages (flows audit F-06: "English works" is never said to
     /// someone who doesn't speak it).
     public init(micMissing: Bool, axMissing: Bool, englishNeedsKey: Bool, missing: CloudCombo?, englishChosen: Bool = true) {
         if micMissing || axMissing { self = .blocked(mic: micMissing, ax: axMissing) }
-        else if englishNeedsKey || missing != nil { self = .needsKey(missing, englishWorks: englishChosen && !englishNeedsKey) }
+        else if englishNeedsKey || missing != nil {
+            self = .needsKey(missing, englishWorks: englishChosen && !englishNeedsKey, englishWaits: englishChosen && englishNeedsKey)
+        }
         else { self = .ready }
     }
 
@@ -30,10 +33,12 @@ public enum Readiness: Equatable, Sendable {
     public var englishWorks: Bool {
         switch self {
         case .blocked: return false
-        case .needsKey(_, let e): return e
+        case .needsKey(_, let e, _): return e
         case .ready: return true
         }
     }
+    /// English is chosen and waits for a key (a hosted engine with none on file).
+    public var englishWaits: Bool { if case .needsKey(_, _, let w) = self { return w }; return false }
 
     /// What a language row shows: while a permission is missing every row waits for it, whatever its key says.
     public func shown(_ s: HomeState.LangStatus) -> HomeState.LangStatus { isBlocked ? .blocked : s }
@@ -103,8 +108,8 @@ public struct HomeState: Equatable, Sendable {
     /// The hero's Permissions group lists only what is missing.
     public let micMissing: Bool
     public let axMissing: Bool
-    /// macOS holds the key in use behind its password dialog (or refused it). Never shown without a cloud key in
-    /// use (GAPS 7).
+    /// The launch key read is not ready: the one-time move out of the Keychain waits on (or was refused at) the macOS
+    /// password dialog, or the key file is unreadable (D4). Never shown without a cloud key in use (GAPS 7).
     public let keychainNotice: Bool
     /// The shared answer (see `Readiness`). `rows` keep the key/engine status; views draw `shownRows`.
     public let readiness: Readiness

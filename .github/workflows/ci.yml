@@ -28,12 +28,35 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: .build
-          key: build-${{ runner.os }}-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          key: build-${{ runner.os }}-${{ steps.swift.outputs.version }}-${{ hashFiles('Package.swift') }}   # zero packages: no Package.resolved
           restore-keys: |
             build-${{ runner.os }}-${{ steps.swift.outputs.version }}-
 
-      - name: Install lint tools
-        run: brew install swiftformat swiftlint
+      # Pinned release binaries, checked against the SHA-256 GitHub publishes for each asset (owner D15, 2026-10-25).
+      # To upgrade: change the version and the hash together, and match the local Homebrew versions.
+      - name: Install pinned tools (swiftformat 0.63.1, swiftlint 0.65.1, gitleaks 8.30.1)
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/tools"; mkdir -p "$d"; cd "$d"
+          curl -fsSL -o swiftformat.zip https://github.com/nicklockwood/SwiftFormat/releases/download/0.63.1/swiftformat.zip
+          curl -fsSL -o swiftlint.zip https://github.com/realm/SwiftLint/releases/download/0.65.1/portable_swiftlint.zip
+          curl -fsSL -o gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_darwin_arm64.tar.gz
+          shasum -a 256 -c <<'EOF'
+          385ef1a263ba28685157b98c5536b9c9105e124518f28b7ef8a2bee4b167eaeb  swiftformat.zip
+          c1e429b0599cf1b516f369a2d9ec04eaf0e436f3c12b637df8851fa52ff694d0  swiftlint.zip
+          b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5  gitleaks.tar.gz
+          EOF
+          unzip -oq swiftformat.zip swiftformat; unzip -oq swiftlint.zip swiftlint; tar xzf gitleaks.tar.gz gitleaks
+          chmod +x swiftformat swiftlint gitleaks
+          echo "$d" >> "$GITHUB_PATH"
+
+      - name: Secrets scan (gitleaks, tracked tree)
+        run: |   # the committed tree only (not the restored .build cache), as scripts/prelaunch_check.sh does
+          t="$RUNNER_TEMP/tree"; mkdir -p "$t"; git archive HEAD | tar -x -C "$t"
+          gitleaks dir --no-banner --redact --config .gitleaks.toml "$t"
+
+      - name: Hook tests
+        run: .claude/hooks/test_hooks.sh
 
       - name: Format check
         run: swiftformat --lint .

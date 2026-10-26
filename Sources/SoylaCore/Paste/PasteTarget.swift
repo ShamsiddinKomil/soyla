@@ -228,10 +228,15 @@ public enum PasteKeycode {
     /// which reported false on the main queue under `dispatchMain()` and deadlocked a nested hop (CLI, 2026-10-16).
     public static func onMain<T>(_ body: () -> T) -> T {
         if Thread.isMainThread || DispatchQueue.getSpecific(key: mainKey) != nil { return body() }
+        // SAFETY (D10, stays): callers are synchronous (the paste path and the CLI), and a sync hop is what keeps TIS
+        // on main without making them async. An `await MainActor.run` would need every caller async; deadlock is ruled
+        // out above (re-entrant check) and by the main thread never being blocked (GUI run loop / `dispatchMain()`).
         return DispatchQueue.main.sync(execute: body)
     }
     private static let mainKey: DispatchSpecificKey<Bool> = {
         let k = DispatchSpecificKey<Bool>()
+        // SAFETY (D10, stays): marks the main queue so `onMain` can tell "already on main" when `Thread.isMainThread`
+        // lies (under `dispatchMain()`); the main actor has no equivalent queue-identity check.
         DispatchQueue.main.setSpecific(key: k, value: true)
         return k
     }()

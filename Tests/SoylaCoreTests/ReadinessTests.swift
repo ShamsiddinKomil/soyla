@@ -16,7 +16,7 @@ import Foundation
         #expect(Readiness(micMissing: true, axMissing: false, englishNeedsKey: true, missing: .uz) == .blocked(mic: true, ax: false))
         #expect(Readiness(micMissing: false, axMissing: true, englishNeedsKey: false, missing: nil) == .blocked(mic: false, ax: true))
         #expect(Readiness(micMissing: false, axMissing: false, englishNeedsKey: false, missing: .uz) == .needsKey(.uz, englishWorks: true))
-        #expect(Readiness(micMissing: false, axMissing: false, englishNeedsKey: true, missing: nil) == .needsKey(nil, englishWorks: false))
+        #expect(Readiness(micMissing: false, axMissing: false, englishNeedsKey: true, missing: nil) == .needsKey(nil, englishWorks: false, englishWaits: true))
         #expect(Readiness(micMissing: false, axMissing: false, englishNeedsKey: false, missing: nil) == .ready)
     }
 
@@ -47,9 +47,9 @@ import Foundation
 
     @Test func aHostedEngineWithNoKeyMeansEnglishWaitsToo() {
         let h = home(.granted, [.en, .uz], provider: .openRouter)
-        #expect(h.readiness == .needsKey(.uz, englishWorks: false))
+        #expect(h.readiness == .needsKey(.uz, englishWorks: false, englishWaits: true))
         let en = home(.granted, [.en], provider: .google)
-        #expect(en.readiness == .needsKey(nil, englishWorks: false))
+        #expect(en.readiness == .needsKey(nil, englishWorks: false, englishWaits: true))
     }
 
     @Test func theMenuSaysHotkeyOffOnlyWhenNoPermissionFixIsShown() {
@@ -132,8 +132,11 @@ import Foundation
     }
 
     @Test func itNeverSaysEnglishWorksWhenItDoesnt() {
-        let hosted = card.shown(.en, readiness: .needsKey(.uz, englishWorks: false))
-        #expect(hosted.title == "Uzbek needs an API key" && hosted.hint == "Connect a key to start dictating.")
+        // D22 (owner-approved change): a hosted engine with no key and English chosen names Soyla, not Uzbek.
+        let hosted = card.shown(.en, readiness: .needsKey(.uz, englishWorks: false, englishWaits: true))
+        #expect(hosted.title == "Soyla needs an API key" && hosted.hint == "Connect a key to start dictating.")
+        let noEnglish = card.shown(.en, readiness: .needsKey(.uz, englishWorks: false))
+        #expect(noEnglish.title == "Uzbek needs an API key" && noEnglish.hint == "Connect a key to start dictating.")
         let none = card.shown(.en, readiness: .needsKey(nil, englishWorks: false))
         #expect(none.title == "Soyla needs an API key" && none.hint == "Connect a key to start dictating.")
         #expect(card.shown(.ru, readiness: .needsKey(nil, englishWorks: false)).title == "Soyla нужен API-ключ")

@@ -6,6 +6,7 @@
 
 - [ ] `scripts/test.sh` passes
 - [ ] `python3 -I Tests/test_report.py` passes
+- [ ] `swiftformat --lint .` and `scripts/lint.sh` are clean (CI runs both)
 - [ ] Tried it by hand in the app (say which target app and what you did)
 
 ## Checklist

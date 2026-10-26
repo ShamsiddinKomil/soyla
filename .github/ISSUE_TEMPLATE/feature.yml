@@ -2,6 +2,11 @@ name: Feature request
 description: Suggest an improvement
 labels: ["enhancement"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never post your API key**, here or anywhere. Soyla and its maintainer will never ask for it; anyone who does is not us.
+        The only official download is this repository's [Releases](https://github.com/ShamsiddinKomil/soyla/releases) page; check the zip with its `.sha256` file and the signing-certificate fingerprint in the release notes ([how](https://github.com/ShamsiddinKomil/soyla/blob/main/docs/INSTALL.md#1-download-and-install)).
   - type: textarea
     id: problem
     attributes:

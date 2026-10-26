@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 // Soyla's design code (docs/DESIGN.md): tokens as `Ink.*`, then the handful of components every screen is built from.
-// One hue across surfaces, one accent (lazur), speech in a serif, keys drawn as keys, status as a dot and a word.
+// One hue across surfaces, one accent (lazur), speech on a note card, keys drawn as keys, status as a dot and a word.
 
 // MARK: - Tokens
 
@@ -47,21 +47,17 @@ enum Ink {
     static let s1: CGFloat = 4, s2: CGFloat = 8, s3: CGFloat = 12, s4: CGFloat = 16, s6: CGFloat = 24, s8: CGFloat = 32, s10: CGFloat = 40
     static let rControl: CGFloat = 6, rCard: CGFloat = 10, rSheet: CGFloat = 14
     static let sidebarWidth: CGFloat = 200
-    static let pageWidth: CGFloat = 640
 
     enum Font {
         static let caption = SwiftUI.Font.system(size: 11)
         static let body = SwiftUI.Font.system(size: 13)
         static let subhead = SwiftUI.Font.system(size: 13, weight: .semibold)
         static let title = SwiftUI.Font.system(size: 17, weight: .semibold)
-        static let page = SwiftUI.Font.system(size: 22, weight: .semibold)
-        static let stat = SwiftUI.Font.system(size: 28, weight: .semibold, design: .rounded)
         /// What you said: the system face at reading size (the serif read poorly in mixed Latin/Cyrillic, owner
         /// 2026-10-16). Paired with `Ink.transcriptLeading`.
         static let spoken = SwiftUI.Font.system(size: 15)
         static let noteMeta = SwiftUI.Font.system(size: 11, weight: .medium)
         static let key = SwiftUI.Font.system(size: 12, weight: .semibold, design: .rounded)
-        static let keyHero = SwiftUI.Font.system(size: 26, weight: .semibold, design: .rounded)
         static let mono = SwiftUI.Font.system(size: 11, design: .monospaced)
         // Setup's type scale, drawn at v5's sizes (title 28, subtitle/label 14, caption 12.5, practice 22) × SetupScale.
         static let setupTitle = SwiftUI.Font.system(size: SetupScale.type(28), weight: .semibold)
@@ -152,19 +148,6 @@ public enum SettingsPage: String, CaseIterable, Identifiable, Sendable {
         case .developer: return "Developer"
         }
     }
-    /// One line that says what the page is for, shown under the title.
-    var purpose: String {
-        switch self {
-        case .permissions: return "What macOS lets Soyla do: hear you, paste, notice the hotkey."
-        case .apiKeys: return "Where each language turns into text."
-        case .dictation: return "Model, language, the correction pass and your dictionary."
-        case .hotkey: return "Which key you hold to talk, and where the text goes."
-        case .pill: return "The small indicator shown while you dictate."
-        case .privacy: return "Recordings on disk, the microphone, launch at login."
-        case .about: return "Version, updates, the Setup Assistant."
-        case .developer: return "Lab controls and timings. Not needed day to day."
-        }
-    }
     var icon: String {
         switch self {
         case .permissions: return "checkmark.shield"
@@ -180,46 +163,6 @@ public enum SettingsPage: String, CaseIterable, Identifiable, Sendable {
 }
 
 // MARK: - Components
-
-/// A keyboard key drawn as a key: a face with a 2 pt bottom edge. `pressed` sinks it and turns it lazur
-/// (Home shows the hotkey pressed while it is really held).
-struct KeyCap: View {
-    enum Size { case small, hero }
-    let text: String
-    var size: Size = .small
-    var pressed = false
-
-    private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: size == .hero ? Ink.rCard : Ink.rControl, style: .continuous) }
-
-    var body: some View {
-        Text(text)
-            .font(size == .hero ? Ink.Font.keyHero : Ink.Font.key)
-            .foregroundStyle(pressed ? Color.white : Ink.text)
-            .padding(.horizontal, size == .hero ? Ink.s6 : 7)
-            .padding(.vertical, size == .hero ? Ink.s4 : 3)
-            .frame(minWidth: size == .hero ? 104 : 26, minHeight: size == .hero ? 72 : 22)
-            .background(shape.fill(pressed ? Ink.lazur : Ink.raised))
-            .overlay(shape.strokeBorder(pressed ? Ink.lazur : Ink.hairlineStrong))
-            .background(shape.fill(pressed ? Ink.lazur : Ink.hairlineStrong).offset(y: pressed ? 0 : 2))
-            .offset(y: pressed ? 2 : 0)
-            .animation(.easeOut(duration: 0.12), value: pressed)
-            .accessibilityLabel(AppStrings.current.d.keyA11y(text))
-            .accessibilityValue(pressed ? AppStrings.current.d.keyHeld : "")
-    }
-}
-
-/// Key caps on the left, what they do on the right.
-struct KeyHint: View {
-    let keys: [String]
-    let action: String
-    var body: some View {
-        HStack(spacing: Ink.s2) {
-            HStack(spacing: 3) { ForEach(keys.indices, id: \.self) { KeyCap(text: keys[$0]) } }
-            Text(action).font(Ink.Font.body).foregroundStyle(Ink.text2)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
 
 /// The brand: a capsule (the pill) with five bars in the silhouette of a spoken word. Drawn, never an asset, so the
 /// app icon, the menu bar, the sidebar, Welcome and the live pill all share one geometry (docs/DESIGN.md).
@@ -277,19 +220,6 @@ struct BrandMark: View {
     }
 }
 
-/// The wordmark next to the capsule.
-struct BrandLockup: View {
-    var markWidth: CGFloat = 30
-    var body: some View {
-        HStack(spacing: markWidth * 0.3) {
-            BrandMark(width: markWidth)
-            Text("Soyla").font(.system(size: markWidth * 0.5, weight: .semibold)).tracking(-markWidth * 0.013).foregroundStyle(Ink.text)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Soyla")
-    }
-}
-
 /// The five bars alone, resting or live from the pill's level (Home hero while recording).
 struct Mark: View {
     var level: () -> Double = { 0 }
@@ -316,12 +246,15 @@ struct StatusLine: View {
     }
 }
 
-/// What the user said, in the serif.
+/// What the user said, in the system face at reading size.
 struct SpokenText: View {
     let text: String
     var lines: Int? = 4
+    /// D26 (c): the same words with what cleanup changed marked (History's diff). VoiceOver still reads `text`.
+    var styled: AttributedString? = nil
     var body: some View {
-        Text(text).font(Ink.Font.spoken).foregroundStyle(Ink.text)
+        Group { if let styled { Text(styled).accessibilityLabel(text) } else { Text(text) } }
+            .font(Ink.Font.spoken).foregroundStyle(Ink.text)
             .lineSpacing(5).lineLimit(lines).textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -335,6 +268,11 @@ struct NoteCard<Actions: View>: View {
     let text: String?
     var placeholder: String = ""
     var lines: Int? = 6
+    /// D26 (c): a small tag after the meta line ("Cleaned"), the diff-marked text, and a quiet line under the text.
+    var badge: String? = nil
+    var badgeHelp: String? = nil
+    var styled: AttributedString? = nil
+    var note: String? = nil
     @ViewBuilder var actions: Actions
 
     private var shape: RoundedRectangle { RoundedRectangle(cornerRadius: Ink.rCard, style: .continuous) }
@@ -347,11 +285,18 @@ struct NoteCard<Actions: View>: View {
                     Text("·").font(Ink.Font.noteMeta).foregroundStyle(Ink.text4)
                 }
                 Text(meta).font(Ink.Font.noteMeta).foregroundStyle(Ink.text2).monospacedDigit().lineLimit(1)
+                if let badge {
+                    Text(badge).font(Ink.Font.noteMeta).foregroundStyle(Ink.lazur).lineLimit(1)
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(RoundedRectangle(cornerRadius: Ink.rControl, style: .continuous).fill(Ink.lazurWash))
+                        .help(badgeHelp ?? badge)
+                }
                 Spacer(minLength: Ink.s2)
                 actions
             }
             if let t = text, !t.isEmpty {
-                SpokenText(text: t, lines: lines)
+                SpokenText(text: t, lines: lines, styled: styled)
+                if let note { Text(note).font(Ink.Font.caption).foregroundStyle(Ink.text2).fixedSize(horizontal: false, vertical: true) }
             } else {
                 Text(placeholder).font(Ink.Font.body).foregroundStyle(Ink.text3).fixedSize(horizontal: false, vertical: true)
             }
@@ -421,22 +366,7 @@ struct CopyButton: View {
             Paster.copy(text); onCopy?()
             token += 1; let t = token
             withAnimation(.easeOut(duration: 0.12)) { copied = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { if token == t { withAnimation { copied = false } } }
-        }
-    }
-}
-
-/// Title and one line of purpose above a page.
-struct PageHeader: View {
-    let title: String
-    var purpose: String? = nil
-    var body: some View {
-        VStack(alignment: .leading, spacing: Ink.s1) {
-            Text(title).font(Ink.Font.page).tracking(-0.4).foregroundStyle(Ink.text)
-                .accessibilityAddTraits(.isHeader)
-            if let purpose {
-                Text(purpose).font(Ink.Font.body).foregroundStyle(Ink.text2).fixedSize(horizontal: false, vertical: true)
-            }
+            Task { @MainActor in if await MainDelay.elapsed(1.5), token == t { withAnimation { copied = false } } }
         }
     }
 }
@@ -533,19 +463,6 @@ extension Callout where Action == EmptyView {
     init(_ kind: Kind, _ text: String) { self.init(kind, text) { EmptyView() } }
 }
 
-/// Big number with its unit under it.
-struct Stat: View {
-    let value: String
-    let label: String
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(value).font(Ink.Font.stat).monospacedDigit().foregroundStyle(Ink.text)
-            Text(label).font(Ink.Font.caption).foregroundStyle(Ink.text2)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
 /// The inset "well" every text field sits in.
 struct WellModifier: ViewModifier {
     func body(content: Content) -> some View {
@@ -560,11 +477,6 @@ struct WellModifier: ViewModifier {
 
 extension View {
     func well() -> some View { modifier(WellModifier()) }
-    /// The content column of a page: left-aligned, capped width, page margins (top clears the hidden title bar).
-    func pageColumn() -> some View {
-        self.frame(maxWidth: Ink.pageWidth, alignment: .leading)
-            .padding(.horizontal, Ink.s8).padding(.top, Ink.s10).padding(.bottom, Ink.s10)
-    }
     /// Menu pickers and switches inside rows: no label of their own, natural size, lazur tint.
     func rowControl() -> some View { labelsHidden().fixedSize().tint(Ink.lazur) }
 }
@@ -647,6 +559,19 @@ struct LivePill: View {
             .overlay(Capsule().strokeBorder(Color.white.opacity(0.18), lineWidth: 0.5))
             .shadow(color: .black.opacity(0.5), radius: 12, y: 8)
             .accessibilityHidden(true)
+    }
+}
+
+/// D26(b): a tiny label on the black pill ("RU", "UZ·EN"): the language set while recording, when it isn't the default.
+struct PillChip: View {
+    let text: String
+    let label: String
+    var body: some View {
+        Text(text).font(Ink.Font.caption).foregroundStyle(Ink.onLapis2)
+            .padding(.horizontal, 6).frame(height: 16)
+            .overlay(Capsule().strokeBorder(Ink.lapisLine, lineWidth: 0.5))
+            .lineLimit(1).fixedSize()
+            .accessibilityLabel(label)
     }
 }
 

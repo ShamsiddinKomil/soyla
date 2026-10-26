@@ -18,8 +18,8 @@ public final class FloatingPanel {
     private let model: PanelModel
     private let hosting: PillHostingView
     private let store: SettingsStore
-    private var hideWork: DispatchWorkItem?
-    private var screenWork: DispatchWorkItem?
+    private let hideTimer = MainTimer()     // D10: was a DispatchWorkItem; same cancel / re-arm (MainTimerTests)
+    private let screenTimer = MainTimer()
     private var sinks = Set<AnyCancellable>()
     private var observers: [NSObjectProtocol] = []
     /// Logical visibility (the window itself stays ordered in, alpha 0 when hidden).
@@ -68,7 +68,7 @@ public final class FloatingPanel {
         hosting.menuProvider = { [weak self] in self?.contextMenu() }
 
         model.objectWillChange.sink { [weak self] _ in
-            DispatchQueue.main.async { MainActor.assumeIsolated { self?.react() } }
+            Task { @MainActor in self?.react() }   // after the change lands (willChange), as the main-queue hop did
         }.store(in: &sinks)
         let nc = NotificationCenter.default
         observers.append(nc.addObserver(forName: SettingsStore.didChange, object: store, queue: .main) { [weak self] _ in
@@ -79,12 +79,7 @@ public final class FloatingPanel {
         })
         // Fires several times per reconfiguration → debounce 400 ms.
         observers.append(nc.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated {
-                self?.screenWork?.cancel()
-                let w = DispatchWorkItem { MainActor.assumeIsolated { self?.screensChanged() } }
-                self?.screenWork = w
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: w)
-            }
+            MainActor.assumeIsolated { self?.screenTimer.schedule(after: 0.4) { self?.screensChanged() } }
         })
         observers.append(NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -100,7 +95,7 @@ public final class FloatingPanel {
     /// it: they used to re-run `react()` (a SwiftUI layout pass via `fittingSize`) up to 60 times a second.
     private struct Look: Equatable {
         var phase: PanelModel.Phase; var caption: String?; var live: String; var failure: String?
-        var details: Bool; var wait: PillWaitStage; var arming: Bool; var micLive: Bool; var tapPending: Bool
+        var details: Bool; var wait: PillWaitStage; var micLive: Bool; var tapPending: Bool
     }
     private var lastLook: Look?
     private var lastWasCard = false
@@ -108,7 +103,7 @@ public final class FloatingPanel {
     private func react() {
         let look = Look(phase: model.phase, caption: model.caption, live: model.showLiveText ? model.liveText : "",
                         failure: model.failure?.title, details: model.showDetails, wait: model.waitStage,
-                        arming: model.arming, micLive: model.micLive, tapPending: model.tapPending)
+                        micLive: model.micLive, tapPending: model.tapPending)
         guard look != lastLook else { return }
         lastLook = look
         announce()
@@ -131,11 +126,9 @@ public final class FloatingPanel {
         if shown && !hosting.isDragging { layout(animated: !swap) }
         updateMouse()
         // SwiftUI applies the new body after this call; measure again once the swap has rendered.
-        DispatchQueue.main.async { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self, self.shown, !self.hosting.isDragging else { return }
-                self.layout(animated: !swap)
-            }
+        Task { @MainActor [weak self] in
+            guard let self, self.shown, !self.hosting.isDragging else { return }
+            self.layout(animated: !swap)
         }
     }
 
@@ -143,7 +136,7 @@ public final class FloatingPanel {
     public func show() { show(force: false) }
 
     private func show(force: Bool) {
-        hideWork?.cancel(); hideWork = nil
+        hideTimer.cancel()
         if !force && snoozed && model.phase != .failed { return }
         if !shown {
             pickScreen()
@@ -177,27 +170,22 @@ public final class FloatingPanel {
     }
 
     public func scheduleHide(after sec: Double) {
-        hideWork?.cancel()
+        hideTimer.cancel()
         guard shown else { return }
-        let w = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.hideNow() } }
-        hideWork = w
-        DispatchQueue.main.asyncAfter(deadline: .now() + sec, execute: w)
+        hideTimer.schedule(after: sec) { [weak self] in self?.hideNow() }
     }
 
     /// F-05: a card ends itself (the phase goes idle), so nothing can bring it back later; a new hold replaces it.
     private func scheduleDismiss(after sec: Double) {
-        hideWork?.cancel()
         let shownFailure = model.failure
-        let w = DispatchWorkItem { [weak self] in MainActor.assumeIsolated {
+        hideTimer.schedule(after: sec) { [weak self] in   // replaces a pending hide, as cancelling hideWork did
             guard let self, self.model.phase == .failed, self.model.failure == shownFailure else { return }
             self.model.phase = .idle
-        } }
-        hideWork = w
-        DispatchQueue.main.asyncAfter(deadline: .now() + sec, execute: w)
+        }
     }
 
     private func hideNow() {
-        hideWork?.cancel(); hideWork = nil
+        hideTimer.cancel()
         previewing = false; placing = false
         if model.placeHint { model.placeHint = false }
         guard shown else { return }
@@ -368,6 +356,7 @@ public final class FloatingPanel {
         m.addItem(ClosureMenuItem(AppStrings.for(model.uiLanguage).d.pcResetPos) { [weak self] in
             self?.store.update { $0.pillPosition = .bottomCenter; $0.pillAnchor = nil }
         })
+        for it in CleanupChoice.pillItems(store: store, language: model.uiLanguage) { m.addItem(it) }   // D26 (c)
         return m
     }
 
@@ -465,7 +454,7 @@ struct PillView: View {
     private var mode: Waveform.Mode {
         // .done keeps the working wave while the pill fades (it used to snap to the dim still bars for a frame).
         if processing || model.phase == .done { return .processing }
-        return model.phase == .recording && !model.arming && !model.tapPending ? .live : .arming
+        return model.phase == .recording && !model.tapPending ? .live : .arming
     }
     private var tintColor: Color {
         switch model.tint { case .normal: return .white; case .amber: return .orange; case .red: return .red }
@@ -482,7 +471,7 @@ struct PillView: View {
                             .foregroundStyle(model.tint == .normal ? Color.white.opacity(0.85) : tintColor)
                             .accessibilityHidden(true)
                     } else if model.phase == .recording {
-                        Circle().fill(model.arming || model.tapPending || !model.micLive ? Color.white.opacity(0.3) : (model.tint == .normal ? Color.red : tintColor))
+                        Circle().fill(model.tapPending || !model.micLive ? Color.white.opacity(0.3) : (model.tint == .normal ? Color.red : tintColor))
                             .frame(width: 6, height: 6)
                     } else {
                         Color.clear
@@ -491,6 +480,9 @@ struct PillView: View {
                 .frame(width: 8, height: 10)
                 Waveform(level: { [model] in model.displayLevel }, mode: mode, color: tintColor, reduceMotion: model.reduceMotion)
                     .animation(model.reduceMotion ? nil : .easeInOut(duration: 0.18), value: model.tint)
+                if model.phase == .recording, let chip = model.languageChip {
+                    PillChip(text: chip, label: LanguageSetStrings.for(model.uiLanguage).chipA11y(chip))
+                }
                 if let c = model.caption {
                     Text(c).font(.system(size: 11, weight: .medium))
                         .foregroundStyle(model.tint == .normal ? Color.white.opacity(0.75) : tintColor)

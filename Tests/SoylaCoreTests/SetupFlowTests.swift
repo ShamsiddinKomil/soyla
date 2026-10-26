@@ -190,7 +190,7 @@ import Foundation
 
     @Test func connectNeedsAVerifiedKey() {
         var f = atConnect()
-        #expect(f.step == .connect && f.provider == .google && f.keyState == .idle && !f.canContinue)
+        #expect(f.step == .connect && f.provider == .openRouter && f.keyState == .idle && !f.canContinue)   // D3: OpenRouter first
         f.markOpened()
         #expect(f.keyState == .opened)
         f.keyChecking()
@@ -215,7 +215,7 @@ import Foundation
     @Test func providerChangeResetsTheKeyState() {
         var f = atConnect()
         f.keyFailed(.malformed)
-        f.setProvider(.openRouter)
+        f.setProvider(.google)                                   // D3: OpenRouter is the default now
         #expect(f.keyState == .idle)
     }
 

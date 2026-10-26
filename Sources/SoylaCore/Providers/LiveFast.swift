@@ -84,14 +84,15 @@ public enum LiveFastDecision {
         }
     }
 
-    public static func decide(strict: Bool, live: LiveOutcome?, pieces: String?, voicedSec: Double)
+    /// `languages` (D26b): the speaker's set; Live text outside it goes to Gemini, whose check never drops the text.
+    public static func decide(strict: Bool, live: LiveOutcome?, pieces: String?, voicedSec: Double, languages: [String] = [])
         -> (source: PasteSource, reason: String) {
         guard let live, live.finalArrived else { return (.gemini, "no_final") }
         let words = TextGuards.words(live.text)
         guard !words.isEmpty else { return (.gemini, "empty") }
         // The owner speaks ~2 words per voiced second; under 0.8 means Live dropped speech.
         if voicedSec > 3, Double(words.count) / voicedSec < 0.8 { return (.gemini, "too_few_words") }
-        if TextGuards.scriptIssue(live.text) != nil { return (.gemini, "script") }
+        if TextGuards.scriptIssue(live.text, languages: languages) != nil { return (.gemini, "script") }
         if strict { return (.live, "strict") }
         // Auto: the chosen session's own text must look like its language (a wrong lock writes misheard words).
         let fit = LanguageScore.score(live.text, code: live.language) / Double(words.count)

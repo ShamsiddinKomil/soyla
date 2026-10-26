@@ -2,9 +2,9 @@ import Testing
 import Foundation
 @testable import SoylaCore
 
-/// Soyla Dev keeps its keys in a 0600 file instead of the Keychain: every rebuild changes the signature and
-/// macOS would ask for the password again (owner decision 2026-10-17). Release must never use the file.
-@Suite("Dev key file (Soyla Dev only)")
+/// Every build keeps its keys in a 0600 file instead of the Keychain (D4, owner 2026-10-25; Soyla Dev since
+/// 2026-10-17): without an Apple team ID every update or rebuild made macOS ask for the password again.
+@Suite("Key file (every build, D4)")
 struct DevKeyFileTests {
     private func withFile(_ body: (KeyFileStore, URL) throws -> Void) throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("soyla-keyfile-\(UUID().uuidString)")
@@ -13,15 +13,14 @@ struct DevKeyFileTests {
         try body(KeyFileStore(url: url), url)
     }
 
-    @Test func onlyTheDevVariantUsesTheFile() {
-        #expect(Soyla.usesKeyFile(bundleID: "ai.soyla.dev"))
-        for id in [nil, "", "ai.soyla.app", "ai.soyla.", "ai.soyla.capture", "ai.soyla.devx", "com.apple.dt.xctest.tool"] as [String?] {
-            #expect(!Soyla.usesKeyFile(bundleID: id))
+    @Test func everyBuildUsesTheKeyFile() {
+        for id in ["ai.soyla.dev", nil, "", "ai.soyla.app", "ai.soyla.", "ai.soyla.capture", "ai.soyla.devx", "com.apple.dt.xctest.tool"] as [String?] {
+            #expect(Soyla.usesKeyFile(bundleID: id))
         }
     }
 
-    @Test func processStillUsesTheKeychain() {
-        #expect(Secrets.keychain is KeychainStore)
+    @Test func processUsesTheKeyFile() {
+        #expect(Secrets.keychain is KeyFileStore)
     }
 
     @Test func missingFileIsEmpty() throws {

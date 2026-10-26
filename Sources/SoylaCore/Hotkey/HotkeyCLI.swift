@@ -84,7 +84,7 @@ public enum HotkeyCLI {
         typealias E = HotkeyReducer.Event
         let rows: [(String, [(Double, E)])] = [
             ("hold 1.2 s → push-to-talk", [(0, .down), (1.2, .up), (2.5, .pipelineIdle)]),
-            ("tap 0.45 s → silent, dropped 0.8 s after release", [(0, .down), (0.45, .up)]),
+            ("tap 0.45 s → silent, dropped 0.6 s after release", [(0, .down), (0.45, .up)]),
             ("double press 0.5 s after release → locked; press again → send", [(0, .down), (0.1, .up), (0.6, .down), (0.7, .up), (5, .down), (5.1, .up), (6, .pipelineIdle)]),
             ("other key while held → abort", [(0, .down), (0.8, .otherKey), (1.0, .up)]),
             ("press while processing → one notice", [(0, .down), (1, .up), (1.5, .down), (1.6, .up), (1.8, .down), (3, .pipelineIdle)]),

@@ -7,7 +7,7 @@ import Foundation
 /// | Gesture                              | Result                                                              |
 /// |--------------------------------------|---------------------------------------------------------------------|
 /// | hold ≥ 0.5 s, release                | push-to-talk → `.stopAndSend`                                       |
-/// | tap < 0.5 s                          | silent: recording keeps running hidden until 0.8 s after release,   |
+/// | tap < 0.5 s                          | silent: recording keeps running hidden until 0.6 s after release,   |
 /// |                                      | then `.cancelRecording(.tap)` (may be the first half of a double)   |
 /// | second press ≤ 0.6 s after release   | `.lock` (hands-free; the same recording continues, no word lost)    |
 /// | …that second press held ≥ 0.5 s      | `.unlock`: a normal hold after all, its release sends               |
@@ -45,7 +45,7 @@ public struct HotkeyReducer: Sendable {
         case escape
         /// A scheduled deadline (`.schedule(at:)`) passed. Stale ticks are harmless.
         case timer
-        /// The pipeline started processing on its own (55 s hard stop, click on the pill, Retry).
+        /// The pipeline started processing on its own (hard stop at the recording limit, click on the pill, Retry).
         case processingStarted
         /// The pipeline is free again (pasted, failed, dropped, cancelled).
         case pipelineIdle
@@ -58,7 +58,7 @@ public struct HotkeyReducer: Sendable {
     public enum Action: Equatable, Sendable {
         /// Key-down: start capture now (hidden; nothing on screen yet).
         case startRecording
-        /// 0.2 s into a hold: show the pill.
+        /// `revealDelay` (0.1 s) into a hold: show the pill.
         case reveal
         /// A tap that had already been revealed (0.1–0.5 s): hide the pill again, capture keeps running.
         case conceal
@@ -83,7 +83,7 @@ public struct HotkeyReducer: Sendable {
 
     public enum State: Equatable, Sendable {
         case idle
-        /// Key is down, recording; `revealed` once 0.2 s passed.
+        /// Key is down, recording; `revealed` once `revealDelay` (0.1 s) passed.
         case held(downAt: Double, revealed: Bool)
         /// Released before `holdThreshold`: still recording (hidden) until `upAt + doubleTapWindow`, waiting for a
         /// second press.
@@ -187,7 +187,7 @@ public struct HotkeyReducer: Sendable {
             state = .processing(noticed: false); return [.stopAndSend]
         case (.locked, .escape):
             state = .idle; return [.cancelRecording(.escape), .consumeEscape]
-        case (.locked, .processingStarted):                   // click on the pill or the 55 s hard stop
+        case (.locked, .processingStarted):                   // click on the pill or the recording-limit hard stop
             state = .processing(noticed: false); return []
         case (.locked, .pipelineIdle):                        // recording failed to start, card is showing
             state = .idle; return []

@@ -27,7 +27,9 @@ A map of the code for contributors and for anyone checking what the app does. Wh
 
 The **hold gate** is the 0.5 s a key must be held to count as push-to-talk; a shorter press is a tap, which is only
 used for the double-tap lock. The **capture gate** then checks what was recorded: less than 0.6 s of audio or less than
-250 ms of voiced sound is treated as an accidental touch. The voiced-sound part is the Pill setting **Ignore
+250 ms of voiced sound is treated as an accidental touch. A 20 ms slice counts as voiced if it is over 0.02 RMS, or
+over 0.008 RMS and 4 times the recording's own noise floor, so quiet speech in a quiet room counts but a steady hum
+does not. The voiced-sound part is the Pill setting **Ignore
 accidental touches**: Relaxed is 150 ms, Normal 250 ms (default), Strict 400 ms.
 
 A History row is written as `pending` *before* any network call, so a crash, lost Wi-Fi or a rejected key never
@@ -46,7 +48,7 @@ everything else is in `Sources/SoylaCore/`:
 | `Providers/` | Speech-to-text: OpenRouter, Google AI Studio, any OpenAI-compatible URL, Apple's on-device engine, optional Gemini Live preview | `TranscriptionProvider.swift` (the protocol), `ProviderFactory.swift`, `AppleSpeechProvider.swift` and `OnDeviceAvailability.swift` (free engine), `HedgedProvider.swift` (backup request) |
 | `Cleanup/` | Filler removal, the optional correction pass, guards that fall back to the raw text, personal dictionary | `CleanupFlow.swift`, `TextGuards.swift` |
 | `Paste/` | Inserting text into the focused app; keyboard-layout-aware ⌘V; Secure Input detection | `Paster.swift`, `PasteTarget.swift` |
-| `Settings/` | Settings model and storage, API keys in the Keychain, file locations | `Settings.swift`, `Secrets.swift`, `KeychainStore.swift` |
+| `Settings/` | Settings model and storage, API keys in a private file (moved once from the Keychain), file locations | `Settings.swift`, `Secrets.swift`, `KeychainStore.swift` |
 | `Metrics/` | History (`runs.jsonl`), per-run latency timeline, recordings and retention | `RunLog.swift`, `RunRecord.swift`, `RecordingStore.swift` |
 | `CLI/` | Developer commands (below) | `Replay.swift`, `Models.swift` |
 
@@ -55,7 +57,7 @@ everything else is in `Sources/SoylaCore/`:
 | What | Where |
 |---|---|
 | Settings | `UserDefaults` suite `ai.soyla.settings` |
-| API keys | One macOS Keychain item (service `ai.soyla.app`) holding the keys you saved |
+| API keys | `keys.json` in the same folder (mode 0600, left out of backups) holding the keys you saved |
 | History (transcripts, timings, errors) | `~/Library/Application Support/Soyla/runs.jsonl` |
 | Recordings | `~/Library/Application Support/Soyla/recordings/`, deleted after 14 days by default (Settings → Privacy & data) |
 | Diagnostics | `~/Library/Application Support/Soyla/app.log`: timings and error types, never dictated text |

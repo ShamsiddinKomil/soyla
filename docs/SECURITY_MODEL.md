@@ -42,16 +42,37 @@ With the free **On this Mac** engine, **audio and text never leave your Mac**. T
 Nothing else. There is no Soyla server, no account, no telemetry, no analytics and no crash reporter. Requests that
 carry a key use an ephemeral connection with no cache, send the key in a header (never in a URL), refuse redirects
 so the key cannot be forwarded to another host, and strip the key from any error text
-(`Sources/SoylaCore/Providers/OpenRouterHTTP.swift`). A custom base URL must use `https`, except that plain `http` is allowed for `localhost`, `127.0.0.1`, `::1` and any
-`.local` name (`Sources/SoylaCore/Providers/ProviderFactory.swift`).
+(`Sources/SoylaCore/Providers/OpenRouterHTTP.swift`). A custom base URL must use `https`, except that plain `http` is allowed for `localhost`, `127.0.0.1` and `::1` (this
+Mac only; `Sources/SoylaCore/Providers/ProviderFactory.swift`).
 
 ## Keys
 
-API keys are stored in one macOS Keychain item, readable only on this Mac after it has been unlocked once
-(`kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`), so they never sync to iCloud
-(`Sources/SoylaCore/Settings/KeychainStore.swift`). After each update macOS asks for your password once before Soyla
-may read the item again: the app is not signed by an Apple-registered developer, so macOS ties the item to the exact
-build. Clicking **Always Allow** is expected.
+API keys are stored in a private file, `~/Library/Application Support/Soyla/keys.json`
+(`KeyFileStore` in `Sources/SoylaCore/Settings/KeychainStore.swift`). The file is readable and writable by your user
+account only (mode 0600, in a folder with mode 0700); Soyla puts those modes back at every launch if something
+loosened them. It is left out of Time Machine backups, and it never syncs to iCloud.
+
+**The trade-off.** Earlier versions kept the keys in the macOS Keychain. Because Soyla is not signed by an
+Apple-registered developer, macOS tied that item to the exact build and asked for your Mac password after every
+update. The file never asks, but unlike the Keychain it does not ask before *other* programs running as you read it
+either. Anything that already runs under your account could read the key. If that matters to you, use a key with a
+spending limit (OpenRouter) or a free-tier key (Google AI Studio), and revoke it at the provider if your Mac is
+compromised.
+
+**Moving from the Keychain.** The first launch of a version that uses the file reads the old Keychain item once
+(macOS asks for your password one last time), writes the keys to the file, reads them back to check, and only then
+deletes the Keychain item. If you click Deny, nothing is moved or deleted and Soyla asks again at the next launch.
+If the Keychain can't be opened (for example it is locked), the keys already in the file still work, the rest are
+shown as "couldn't open the Keychain", and the move is tried again next launch. If the file can't be written, the
+Keychain item stays and the move is tried again next time. Until the move has finished, a key you connect meanwhile
+is merged with the old ones, never instead of them, and a key you remove meanwhile is remembered so the old copy
+can't bring it back (`KeyMigration` in `Sources/SoylaCore/Settings/Secrets.swift`).
+The file is always replaced in one step (written to a private temporary file, then renamed), so a crash or a full
+disk leaves either the old file or the new one, never half of one; it is flushed to the disk itself (`F_FULLFSYNC`)
+before the Keychain copy is deleted.
+
+**If the file is broken** (not valid JSON, or can't be opened), Soyla shows "Soyla can't read its saved keys file"
+instead of asking for a key it can't see. Connecting a key again replaces the broken file.
 
 ## What stays on your Mac
 
@@ -71,8 +92,8 @@ History is plain text on your disk and is included in Time Machine backups like 
 - **No developer switches in the installed app.** Environment variables that the command-line tools use for testing
   (alternative keys, data folders, update servers) are ignored by `Soyla.app`
   (`Sources/SoylaCore/Settings/DevOverrides.swift`), so nobody can relaunch your Soyla with their own key or server.
-  The separate "Soyla Dev" build that developers run next to the real app keeps its keys in a private file
-  (readable by your user only) instead of the Keychain. Releases never do that: they always use the Keychain.
+  The separate "Soyla Dev" build that developers run next to the real app keeps its keys in its own private file
+  (`Application Support/Soyla Dev/dev-keys.json`), so it never reads the real app's keys.
 - **Self-signed, not notarized.** Releases are signed with the project's own certificate, not an Apple Developer ID,
   so macOS asks you to approve the first open. The certificate's SHA-256 fingerprint is printed in every release's
   notes. Each release also ships a `.sha256` checksum ([how to check it](INSTALL.md#1-download-and-install)).

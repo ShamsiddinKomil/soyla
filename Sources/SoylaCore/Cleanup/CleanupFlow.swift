@@ -97,7 +97,7 @@ public enum CleanupFlow {
     }
 
     public static func run(raw: String, level: CleanupLevel, cleaner makeCleaner: @Sendable () throws -> any TextCleaner,
-                           model: String, vocabulary: [String], appName: String?, languageHint: String?,
+                           model: String, vocabulary: [String], appName: String?, languageHint: String?, languages: [String] = [],
                            dictionary: ReplacementDictionary, cooldownKey: String, cooldown: ProviderCooldown = .shared,
                            timeline: RunTimeline) async -> CleanupOutcome {
         var out = CleanupOutcome(text: raw, status: .ok)
@@ -112,16 +112,16 @@ public enum CleanupFlow {
                                                 scriptReminder: false, timeline: timeline)
                 var usage = r.usage
                 // Script check after cleanup (only blame cleanup if the raw text was fine).
-                if TextGuards.scriptIssue(r.text, languageHint: languageHint) != nil,
-                   TextGuards.scriptIssue(raw, languageHint: languageHint) == nil {
+                if TextGuards.scriptIssue(r.text, languageHint: languageHint, languages: languages) != nil,
+                   TextGuards.scriptIssue(raw, languageHint: languageHint, languages: languages) == nil {
                     out.scriptRetried = true
                     r = try await cleaner.clean(raw, model: model, vocabulary: vocabulary, appName: appName,
                                                 scriptReminder: true, timeline: timeline)
                     usage = Self.sum(usage, r.usage)
                 }
                 out.usage = usage
-                if TextGuards.scriptIssue(r.text, languageHint: languageHint) != nil,
-                   TextGuards.scriptIssue(raw, languageHint: languageHint) == nil {
+                if TextGuards.scriptIssue(r.text, languageHint: languageHint, languages: languages) != nil,
+                   TextGuards.scriptIssue(raw, languageHint: languageHint, languages: languages) == nil {
                     out.status = .guarded; out.guardReason = .script; out.rejected = r.text
                 } else if let g = TextGuards.checkCleanup(input: raw, output: r.text) {
                     out.status = .guarded; out.guardReason = g; out.rejected = r.text
@@ -161,11 +161,11 @@ public struct ScriptCheckError: Error, LocalizedError, Equatable {
     public var errorDescription: String? { "script check failed twice (\(issue.tag))" }
 }
 
-/// Script check after STT: Hangul/CJK/Arabic/Thai in a uz/ru/en session, or Uzbek in Cyrillic → one retry with
+/// Script check after STT: a letter outside Latin/Cyrillic (Hangul, Arabic, Greek…) in a uz/ru/en session, or Uzbek in Cyrillic → one retry with
 /// `TranscribeOptions.extraInstruction` = the "Uzbek in Latin script" line → still wrong → ScriptCheckError.
 public enum ScriptCheck {
     public static let retryInstruction = """
-    IMPORTANT: the speech is in Uzbek, Russian and/or English only. Write Uzbek in the Latin script (o', g', sh, ch), never in Cyrillic. Russian stays Cyrillic. Never output Korean, Chinese, Japanese, Arabic or Thai characters.
+    IMPORTANT: the speech is in Uzbek, Russian and/or English only. Write Uzbek in the Latin script (o', g', sh, ch), never in Cyrillic. Russian stays Cyrillic. Use only Latin and Cyrillic letters: never Korean, Chinese, Japanese, Arabic, Thai, Greek or any other script.
     """
 
     /// Below this many characters per second of a clip ≥ `shortCheckMinSec`, the text is treated as cut off.
@@ -179,6 +179,7 @@ public enum ScriptCheck {
 
     /// The script-checked transcript. A long clip whose text looks cut off is sent once more and the longer
     /// text wins (`provider_meta.short_retry` = "first" | "second"); a failing second try keeps the first.
+    /// At most 2 `checked` calls, so at most 6 provider calls (each may add a hedged backup).
     public static func transcribe(_ provider: any TranscriptionProvider, audio: EncodedAudio, options: TranscribeOptions,
                                   timeline: RunTimeline) async throws -> TranscriptResult {
         let r = try await checked(provider, audio: audio, options: options, timeline: timeline)
@@ -193,23 +194,37 @@ public enum ScriptCheck {
         return best
     }
 
-    /// `provider_meta.script_check`: "ok", or "retried:<issue tag>" when the retry fixed it.
+    /// `provider_meta.script_check`: "ok", or "retried:<issue tag>" when the retry fixed it. At most 3 provider calls:
+    /// the first, one resend if it ran away or was cut off, one script retry (never resent: if it runs away or is cut
+    /// off, the first reply is judged alone, `firstAlone`).
     static func checked(_ provider: any TranscriptionProvider, audio: EncodedAudio, options: TranscribeOptions,
                         timeline: RunTimeline) async throws -> TranscriptResult {
-        var r = try await provider.transcribe(audio, options: options, timeline: timeline)
+        var r = try await notRunaway(provider, try await provider.transcribe(audio, options: options, timeline: timeline),
+                                     audio: audio, options: options, timeline: timeline)
         stripTimestamps(&r, audio)
-        guard let issue = TextGuards.scriptIssue(r.text, languageHint: options.languageHint) else {
+        guard let issue = TextGuards.scriptIssue(r.text, languageHint: options.languageHint, languages: options.languages) else {
             r.providerMeta["script_check"] = "ok"
             return r
         }
         var retry = options
-        retry.extraInstruction = [options.extraInstruction, retryInstruction].compactMap { $0 }.joined(separator: "\n")
+        if r.providerMeta["truncated"] == "retried" { retry.maxTokensScale = options.maxTokensScale * 2 }
+        retry.extraInstruction = [options.extraInstruction, retryInstruction, LanguagePrompt.retryLine(options.languages)]
+            .compactMap { $0 }.joined(separator: "\n")
         var r2 = try await provider.transcribe(audio, options: retry, timeline: timeline)
+        guard !cutOrRunaway(r2, audio) else { return try firstAlone(r, issue: issue, retry: r2, options: options) }
         stripTimestamps(&r2, audio)
         r2.usage = CleanupFlow.sum(r.usage, r2.usage)
-        if let issue2 = TextGuards.scriptIssue(r2.text, languageHint: options.languageHint) {
+        if let issue2 = TextGuards.scriptIssue(r2.text, languageHint: options.languageHint, languages: options.languages) {
+            if issue2 == .latinExtended { return keepLatinExtended(r, first: issue, r2) }
             // A few stray foreign letters (2026-10-17: Arabic in a 45 s English dictation) must not cost the whole text.
-            guard case .foreignScript = issue2, let kept = salvage(r, r2) else { throw ScriptCheckError(issue2) }
+            // D26(b): the set check never costs the dictation: the try with less Cyrillic is pasted.
+            if case .outsideSet = issue2, let kept = keepBetter(r, r2, options: options) {
+                var out = kept
+                out.usage = r2.usage
+                out.providerMeta["script_check"] = "outside_set:kept"
+                return out
+            }
+            guard case .foreignScript = issue2, let kept = salvage(r, r2, languages: options.languages) else { throw ScriptCheckError(issue2) }
             var out = kept
             out.usage = r2.usage
             out.providerMeta["script_check"] = "stripped:" + issue2.tag
@@ -219,13 +234,90 @@ public enum ScriptCheck {
         return r2
     }
 
+    /// The script retry ran away or was cut off: the first reply decides alone, as the helpers do for two tries.
+    /// Latin-extended or outside the set → it is pasted; foreign script → salvaged; anything else → the card.
+    /// `provider_meta.script_retry` = "bad".
+    static func firstAlone(_ r: TranscriptResult, issue: ScriptIssue, retry r2: TranscriptResult,
+                           options: TranscribeOptions) throws -> TranscriptResult {
+        var out: TranscriptResult
+        switch issue {
+        case .latinExtended:
+            out = r; out.providerMeta["script_check"] = "latin_ext:kept"
+        case .outsideSet:
+            guard let kept = keepBetter(r, r, options: options) else { throw ScriptCheckError(issue) }
+            out = kept; out.providerMeta["script_check"] = "outside_set:kept"
+        case .foreignScript:
+            guard let kept = salvage(r, r, languages: options.languages) else { throw ScriptCheckError(issue) }
+            out = kept; out.providerMeta["script_check"] = "stripped:" + issue.tag
+        default:
+            throw ScriptCheckError(issue)
+        }
+        out.usage = CleanupFlow.sum(r.usage, r2.usage)
+        out.providerMeta["script_retry"] = "bad"
+        return out
+    }
+
+    /// An empty reply is "no speech" (`SoylaError.emptyTranscript`) unless the output cap cut it off: then it goes
+    /// back to `notRunaway`, which resends it with twice the cap (Google can spend the cap before writing text).
+    public static func emptyIsNoSpeech(_ text: String, finishReason: String?) -> Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !["max_tokens", "length"].contains(finishReason?.lowercased() ?? "")
+    }
+
+    /// A reply cut off by the output cap: finish reason MAX_TOKENS (Google) or length (OpenRouter chat).
+    static func truncated(_ r: TranscriptResult) -> Bool {
+        ["max_tokens", "length"].contains(r.providerMeta["finish_reason"]?.lowercased() ?? "")
+    }
+
+    static func cutOrRunaway(_ r: TranscriptResult, _ audio: EncodedAudio) -> Bool {
+        TextGuards.ranAway(r.text, durationSec: audio.durationSec) || truncated(r)
+    }
+
+    /// A reply far longer than the clip (a loop or invented text; perf test 2026-10-26) is sent once more,
+    /// `provider_meta.runaway` = "retried". A reply cut off by the cap is sent once more with the cap doubled,
+    /// `provider_meta.truncated` = "retried". The resend bad too → `ScriptCheckError(.runaway)`: nothing is pasted,
+    /// "Didn't understand that" with Retry, and in pieces mode the whole clip is sent instead.
+    static func notRunaway(_ provider: any TranscriptionProvider, _ first: TranscriptResult, audio: EncodedAudio,
+                           options: TranscribeOptions, timeline: RunTimeline) async throws -> TranscriptResult {
+        guard cutOrRunaway(first, audio) else { return first }
+        // A cut-off first reply may be empty (Google MAX_TOKENS spent on thinking); an empty resend is "no speech", as before.
+        let cut = !TextGuards.ranAway(first.text, durationSec: audio.durationSec)   // a runaway gets no more room
+        var o = options
+        if cut { o.maxTokensScale = options.maxTokensScale * 2 }
+        var r2 = try await provider.transcribe(audio, options: o, timeline: timeline)
+        if r2.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { throw SoylaError.emptyTranscript }
+        guard !cutOrRunaway(r2, audio) else { throw ScriptCheckError(.runaway) }
+        r2.usage = CleanupFlow.sum(first.usage, r2.usage)
+        r2.providerMeta[cut ? "truncated" : "runaway"] = "retried"
+        return r2
+    }
+
+    /// Latin-extended letters twice never cost the dictation (Turkish or Polish names, `TextGuards.latinExtWordLimit`):
+    /// the try with fewer such words is pasted, `script_check` = "latin_ext:kept".
+    static func keepLatinExtended(_ r: TranscriptResult, first: ScriptIssue, _ r2: TranscriptResult) -> TranscriptResult {
+        let firstBetter = first == .latinExtended && TextGuards.latinExtWords(r.text) < TextGuards.latinExtWords(r2.text)
+        var out = firstBetter ? r : r2
+        out.usage = r2.usage
+        out.providerMeta["script_check"] = "latin_ext:kept"
+        return out
+    }
+
     /// The try with fewer foreign letters, minus its foreign words; nil if that is still wrong (e.g. Uzbek in Cyrillic).
-    static func salvage(_ a: TranscriptResult, _ b: TranscriptResult) -> TranscriptResult? {
+    static func salvage(_ a: TranscriptResult, _ b: TranscriptResult, languages: [String] = []) -> TranscriptResult? {
         let best = TextGuards.scriptProfile(a.text).foreign <= TextGuards.scriptProfile(b.text).foreign ? a : b
-        guard let text = TextGuards.stripForeignWords(best.text), TextGuards.scriptIssue(text) == nil else { return nil }
+        // Latin-extended words (names) are no reason to lose the text here.
+        guard let text = TextGuards.stripForeignWords(best.text),
+              [nil, .latinExtended].contains(TextGuards.scriptIssue(text, languages: languages)) else { return nil }
         var r = best
         r.text = text
         return r
+    }
+
+    /// D26(b): both tries outside the set → the one with the lower Cyrillic share, among tries that pass the checks
+    /// without the set (no foreign script, no Uzbek in Cyrillic). nil = neither does: the card, as before.
+    static func keepBetter(_ a: TranscriptResult, _ b: TranscriptResult, options: TranscribeOptions) -> TranscriptResult? {
+        [a, b].filter { [nil, .latinExtended].contains(TextGuards.scriptIssue($0.text, languageHint: options.languageHint)) }
+            .min { TextGuards.scriptProfile($0.text).cyrillicShare < TextGuards.scriptProfile($1.text).cyrillicShare }
     }
 
     /// `provider_meta.timestamps_stripped` = how many were removed (absent when none).

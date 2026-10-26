@@ -190,3 +190,17 @@ private final class Counter: @unchecked Sendable {
         #expect(Encoder.voicedMs(pcm16: tap) < 250)                                  // click + silence = accidental touch
     }
 }
+
+@Suite struct FFmpegEnvironmentTests {
+    /// D9: the ffmpeg child gets PATH and HOME only, never keys, Soyla switches or injected libraries.
+    @Test func keepsOnlyPathAndHome() {
+        let env = ["PATH": "/usr/bin:/bin", "HOME": "/Users/test", "OPENROUTER_API_KEY": "FAKE1234",
+                   "GEMINI_API_KEY": "FAKE1234", "SOYLA_HOME": "/tmp/x", "DYLD_INSERT_LIBRARIES": "/tmp/evil.dylib"]
+        #expect(Encoder.ffmpegEnvironment(from: env) == ["PATH": "/usr/bin:/bin", "HOME": "/Users/test"])
+    }
+
+    @Test func missingVariablesStayMissing() {
+        #expect(Encoder.ffmpegEnvironment(from: ["PATH": "/bin", "OPENROUTER_API_KEY": "FAKE1234"]) == ["PATH": "/bin"])
+        #expect(Encoder.ffmpegEnvironment(from: [:]).isEmpty)
+    }
+}

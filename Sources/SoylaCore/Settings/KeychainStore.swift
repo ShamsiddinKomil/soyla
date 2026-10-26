@@ -31,7 +31,8 @@ public enum KeyProvider: String, CaseIterable, Sendable, Identifiable {
     }
 }
 
-/// Where the key bundle lives: the Keychain (release) or, for Soyla Dev only, a 0600 file (`KeyFileStore`).
+/// Where the key bundle lives: a 0600 file (`KeyFileStore`, every build since D4). `KeychainStore` is only the source of
+/// the one-time move (`KeyMigration`) and the test double for the Keychain behaviour.
 public protocol KeyStore: Sendable {
     func get(_ account: String) throws -> String?
     func set(_ value: String, for account: String, label: String?) throws
@@ -97,17 +98,32 @@ public struct KeychainStore: KeyStore {
     }
 }
 
-/// Soyla Dev only (`Soyla.usesKeyFile`): every rebuild changes the ad-hoc signature, so a Keychain item asks for the
-/// login password after each build. Owner decision 2026-10-17: the dev build keeps its keys in a JSON file instead,
-/// mode 0600 in a 0700 folder. Any process running as the user can read it; release never uses it.
+/// Where every build keeps its keys (`Soyla.usesKeyFile`): a JSON file, mode 0600 in a 0700 folder, left out of
+/// backups. Soyla Dev since 2026-10-17, release since D4 (owner, 2026-10-25): without an Apple team ID a Keychain item
+/// made macOS ask for the login password after every update. Trade-off the owner accepted: any process running as
+/// this user can read the file, the Keychain would have asked first.
 public struct KeyFileStore: KeyStore {
+    /// The file exists but is not Soyla's JSON (or can't be opened). Carries no path and no contents.
+    public struct Unreadable: Error, LocalizedError, Sendable {
+        public init() {}
+        public var errorDescription: String? { "Soyla can't read its saved keys file" }
+    }
+
     public let url: URL
     public init(url: URL) { self.url = url }
 
+    public var exists: Bool { FileManager.default.fileExists(atPath: url.path) }
+
     private func read() throws -> [String: String] {
-        guard FileManager.default.fileExists(atPath: url.path) else { return [:] }
-        let data = try Data(contentsOf: url)
-        return (try JSONSerialization.jsonObject(with: data) as? [String: String]) ?? [:]
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: url.path) else { return [:] }
+        // Creation-time modes don't fix a file someone loosened later.
+        if let p = try? fm.attributesOfItem(atPath: url.path)[.posixPermissions] as? Int, p & 0o077 != 0 {
+            try? fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        }
+        guard let data = try? Data(contentsOf: url),
+              let all = (try? JSONSerialization.jsonObject(with: data)) as? [String: String] else { throw Unreadable() }
+        return all
     }
 
     private func write(_ all: [String: String]) throws {
@@ -116,23 +132,60 @@ public struct KeyFileStore: KeyStore {
         try fm.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         if all.isEmpty { try? fm.removeItem(at: url); return }
         let data = try JSONSerialization.data(withJSONObject: all, options: [.sortedKeys])
-        if !fm.fileExists(atPath: url.path) {
-            guard fm.createFile(atPath: url.path, contents: nil, attributes: [.posixPermissions: 0o600]) else {
-                throw CocoaError(.fileWriteNoPermission)
-            }
-        }
-        try data.write(to: url)
+        try replaceAtomically(with: data, in: dir)
         try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
+        var u = url
+        var v = URLResourceValues()
+        v.isExcludedFromBackup = true
+        try? u.setResourceValues(v)
     }
+
+    /// Review D4 #2: a crash or a full disk must never leave a truncated key file (after the move it is the only copy).
+    /// The data goes to a temp file created 0600 in the same 0700 folder, is flushed, then renamed over the old file,
+    /// so the result is the whole new file with mode 0600 or the untouched old one. `F_FULLFSYNC` (plain `fsync` on
+    /// macOS may leave data in the drive's cache) and a sync of the folder make it survive a power cut before the
+    /// Keychain copy is deleted (second review #2).
+    private func replaceAtomically(with data: Data, in dir: URL) throws {
+        let tmp = dir.appendingPathComponent(".\(url.lastPathComponent).\(UUID().uuidString).tmp")
+        let fd = open(tmp.path, O_WRONLY | O_CREAT | O_EXCL, 0o600)
+        guard fd >= 0 else { throw CocoaError(.fileWriteNoPermission) }
+        var ok = fchmod(fd, 0o600) == 0
+        ok = ok && data.withUnsafeBytes { buf -> Bool in
+            guard let base = buf.baseAddress else { return true }
+            var off = 0
+            while off < buf.count {
+                let n = Darwin.write(fd, base + off, buf.count - off)
+                if n <= 0 { return false }
+                off += n
+            }
+            return true
+        }
+        ok = ok && Self.fullSync(fd)
+        ok = close(fd) == 0 && ok
+        guard ok, rename(tmp.path, url.path) == 0 else {
+            unlink(tmp.path)
+            throw CocoaError(.fileWriteUnknown)
+        }
+        // The rename lives in the folder's entry: flush it too.
+        let dfd = open(dir.path, O_RDONLY)
+        guard dfd >= 0 else { throw CocoaError(.fileWriteUnknown) }
+        let synced = Self.fullSync(dfd)
+        close(dfd)
+        guard synced else { throw CocoaError(.fileWriteUnknown) }
+    }
+
+    /// `F_FULLFSYNC` asks the drive to flush to the media; some file systems refuse it, then plain `fsync`.
+    private static func fullSync(_ fd: Int32) -> Bool { fcntl(fd, F_FULLFSYNC) != -1 || fsync(fd) == 0 }
 
     public func get(_ account: String) throws -> String? { try read()[account] }
 
+    /// A broken file is replaced: it is Soyla's own file and nothing in it can be read anyway.
     public func set(_ value: String, for account: String, label: String? = nil) throws {
-        var all = try read(); all[account] = value; try write(all)
+        var all = (try? read()) ?? [:]; all[account] = value; try write(all)
     }
 
     public func delete(_ account: String) throws {
-        var all = try read()
+        guard var all = try? read() else { return try write([:]) }   // broken file: removing a key drops it
         guard all.removeValue(forKey: account) != nil else { return }
         try write(all)
     }

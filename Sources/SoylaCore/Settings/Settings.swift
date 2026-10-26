@@ -1,7 +1,7 @@
 import Foundation
 
 public enum Soyla {
-    public static let version = "0.2.0"
+    public static let version = "0.3.0"
     public static let bundleId = "ai.soyla.app"
     /// Where this process keeps its settings and Keychain items. Release (`ai.soyla.app`), the CLI and tests
     /// (any non-Soyla bundle id) keep today's names. A side-by-side variant (`ai.soyla.dev`, `VARIANT=dev
@@ -23,8 +23,9 @@ public enum Soyla {
                             isRelease: false, supportFolder: "Soyla \(variant.capitalized)")
     }
     public static let storage = storageNames(bundleID: Bundle.main.bundleIdentifier)
-    /// Soyla Dev (`ai.soyla.dev`) keeps API keys in a file, not the Keychain (`KeyFileStore`). Nothing else does.
-    public static func usesKeyFile(bundleID: String?) -> Bool { bundleID == "ai.soyla.dev" }
+    /// Every build keeps API keys in a 0600 file, not the Keychain (`KeyFileStore`): Soyla Dev since 2026-10-17,
+    /// release, the CLI and tests since D4 (owner, 2026-10-25). The Keychain is only read once, to move old keys.
+    public static func usesKeyFile(bundleID _: String?) -> Bool { true }
     /// Must differ from the bundle id: UserDefaults(suiteName: <bundle id>) silently does not persist.
     public static let defaultsSuite = settingsSuite(env: DevOverrides.environment)
     /// `SOYLA_SETTINGS_SUITE` (dev/capture switch, like `SOYLA_KEYCHAIN_SERVICE`) runs the app on separate settings;
@@ -62,8 +63,14 @@ public enum SoylaPaths {
     public static var recordings: URL { root.appendingPathComponent("recordings") }
     /// Dev-only fallback for keys (see Secrets). Never logged.
     public static var envFile: URL { root.appendingPathComponent(".env.local") }
-    /// Soyla Dev's key file (`KeyFileStore`). Never logged.
-    public static var devKeyFile: URL { root.appendingPathComponent("dev-keys.json") }
+    /// The API key file (`KeyFileStore`, 0600 in a 0700 folder). Never logged.
+    public static var keyFile: URL { keyFile(root: root, devLayout: isDevLayout, isRelease: Soyla.storage.isRelease) }
+    /// Release, CLI, tests: `Application Support/Soyla/keys.json`. Soyla Dev keeps its `dev-keys.json` (the folder
+    /// already tells the builds apart; renaming would drop the dev keys). `SOYLA_HOME` puts it in `logs/`, which is
+    /// gitignored, so a repo checkout can never commit it.
+    static func keyFile(root: URL, devLayout: Bool, isRelease: Bool) -> URL {
+        (devLayout ? root.appendingPathComponent("logs") : root).appendingPathComponent(isRelease ? "keys.json" : "dev-keys.json")
+    }
     public static var modelsCache: URL { logs.appendingPathComponent("models_cache.json") }
 
     /// Creates root, logs and recordings (0700) if missing. Called once at launch; cheap to repeat.
@@ -74,7 +81,7 @@ public enum SoylaPaths {
         for dir in [root, logs, recordings] {
             try? fm.createDirectory(at: dir, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         }
-        tighten(dirs: isDevLayout ? [logs, recordings] : [root, recordings], files: [runsLog, appLog, URL(fileURLWithPath: appLog.path + ".1")])
+        tighten(dirs: isDevLayout ? [logs, recordings] : [root, recordings], files: [runsLog, appLog, URL(fileURLWithPath: appLog.path + ".1"), keyFile])
     }
 
     static func tighten(dirs: [URL], files: [URL]) {
@@ -318,7 +325,10 @@ public struct Settings: Codable, Sendable, Equatable {
         if provider == .apple { return .wav }
         return provider == .custom && audioFormat == .flac ? .wav : audioFormat
     }
-    public var languageHint: String? = nil            // nil = auto
+    /// The optional primary language ("Mainly speak"); nil = no primary. D26(b): the set is `languages`.
+    public var languageHint: String? = nil
+    /// D26(b): "my languages", the only languages the speaker uses (cloud). Never empty; see `LanguageSet`.
+    public var languages: [String] = LanguageSet.defaultSet
     /// Free-engine language (R3: the only place it lives). Written by the on-device UI only, never by cloud code;
     /// the free path never writes `languageHint`.
     public var onDeviceLocale: String = OnDeviceLocale.default(preferredLanguages: Locale.preferredLanguages)
@@ -366,8 +376,15 @@ public struct Settings: Codable, Sendable, Equatable {
     public var livePreview: Bool = false
     /// Transcribe the recording in pieces while fn is held. On by default (owner, 2026-10-17).
     public var streamSegments: Bool = true
-    /// Paste Google Live's text when it is safe: under 1 s. Off until measured on owner clips.
-    public var liveFastPath: Bool = false
+    /// Paste Google Live's text when it is safe: about 0.5 s instead of ~2 s (perf tests 2026-10-26). Owner, 2026-10-26:
+    /// on by default only when Google AI Studio is the chosen engine (audio goes only to the provider you picked); any
+    /// engine can turn it on by hand. nil = that default; stored as `liveFast`, so settings saved under the old
+    /// off-by-default `liveFastPath` key pick up the new default once. `makeLiveRace` also needs the Google key.
+    public var liveFast: Bool?
+    public var liveFastPath: Bool {
+        get { liveFast ?? (provider == .google) }
+        set { liveFast = newValue }
+    }
     /// Show the transcript, timing and cost in the pill after each run (off = minimal pill: recording animation only).
     public var showDetails: Bool = false
     /// Daily GET to the GitHub releases API (nothing else sent). Launch-at-login is not stored: SMAppService is the source of truth.
@@ -420,6 +437,7 @@ public struct Settings: Codable, Sendable, Equatable {
         customBaseURL = try c.decodeIfPresent(String.self, forKey: .customBaseURL)
         audioFormat = ((try? c.decodeIfPresent(AudioFormatChoice.self, forKey: .audioFormat)) ?? nil) ?? d.audioFormat
         languageHint = try c.decodeIfPresent(String.self, forKey: .languageHint)
+        languages = LanguageSet.sanitize((try? c.decodeIfPresent([String].self, forKey: .languages)) ?? nil)   // pre-D26b: default set
         onDeviceLocale = ((try? c.decodeIfPresent(String.self, forKey: .onDeviceLocale)) ?? nil) ?? d.onDeviceLocale
         // F3: the level wins when present; a pre-F3 blob derives it from the Bool. didSet does not run in init.
         let enabled = (try? c.decodeIfPresent(Bool.self, forKey: .cleanupEnabled)) ?? nil
@@ -457,7 +475,7 @@ public struct Settings: Codable, Sendable, Equatable {
         soundVolume = min(1, max(0, ((try? c.decodeIfPresent(Double.self, forKey: .soundVolume)) ?? nil) ?? d.soundVolume))
         livePreview = try c.decodeIfPresent(Bool.self, forKey: .livePreview) ?? d.livePreview
         streamSegments = try c.decodeIfPresent(Bool.self, forKey: .streamSegments) ?? d.streamSegments
-        liveFastPath = try c.decodeIfPresent(Bool.self, forKey: .liveFastPath) ?? d.liveFastPath
+        liveFast = try c.decodeIfPresent(Bool.self, forKey: .liveFast)
         minVoicedMs = try c.decodeIfPresent(Double.self, forKey: .minVoicedMs) ?? d.minVoicedMs
         showDetails = try c.decodeIfPresent(Bool.self, forKey: .showDetails) ?? d.showDetails
         autoUpdateCheck = try c.decodeIfPresent(Bool.self, forKey: .autoUpdateCheck) ?? d.autoUpdateCheck

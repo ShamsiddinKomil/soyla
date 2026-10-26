@@ -43,7 +43,7 @@ You're here because you were invited: Soyla is in a private preview before it go
 - **Mixed languages in one sentence.** Built for people who switch between Uzbek, Russian and English mid-thought.
 - **Works in any app.** Text goes where your cursor is: Telegram, Mail, Notes, a browser, a terminal.
 - **Free English on your Mac.** New installs on macOS 26 (or earlier versions that have Apple's English speech model) start on Apple's on-device engine: no key, and your audio never leaves the Mac.
-- **Your key, no account.** For Uzbek, Russian and mixed speech: OpenRouter or Google AI Studio (or any OpenAI-compatible server), connected right under the language it serves and stored in the macOS Keychain.
+- **Your key, no account.** For Uzbek, Russian and mixed speech: OpenRouter or Google AI Studio (or any OpenAI-compatible server), connected right under the language it serves and stored on your Mac in a private file only you can open.
 - **Hold, or lock hands-free.** Hold fn to talk; double-tap to keep recording; Esc cancels. Other hotkeys for non-Apple keyboards.
 - **Never loses what you said.** The recording is on disk before anything is sent; no internet or a failed request leaves a Retry button.
 - **Text as spoken.** No rewriting by default. An optional correction pass removes repeats and applies "no, I mean…" corrections; replacements and a spelling list fix names and terms.
@@ -99,7 +99,7 @@ Needs **macOS 14 or newer** on Apple silicon (Intel is untested). English can ru
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Fixes by symptom: nothing happens, text doesn't appear, key rejected, no internet |
 | [FAQ](docs/FAQ.md) | Offline use, cost, supported Macs, uninstalling |
 | [Privacy and cost](docs/PRIVACY_AND_COST.md) | Exactly what leaves your Mac, what stays, and what it costs |
-| [Security model](docs/SECURITY_MODEL.md) | Permissions, Keychain, updates and signing, with links to the code |
+| [Security model](docs/SECURITY_MODEL.md) | Permissions, key storage, updates and signing, with links to the code |
 | [How it works](docs/HOW_IT_WORKS.md) | The dictation pipeline and a map of the code |
 | [Contributing](CONTRIBUTING.md) | Building, testing and sending a change |
 
@@ -128,8 +128,9 @@ Needs **macOS 14 or newer** on Apple silicon (Intel is untested). English can ru
 
 - **What leaves your Mac:** the recording (and, with the correction pass on, the text) goes to the provider you chose. Soyla also asks GitHub once a day whether a new version exists. Nothing goes to the author: no telemetry, no analytics, no crash reports. Full list: [docs/PRIVACY_AND_COST.md](docs/PRIVACY_AND_COST.md).
 - **Permissions, explained:** the microphone records only while you hold the key; the hotkey listener compares each key with your hotkey and drops it, never storing or logging what you type; Accessibility is used to paste, not to read your screen. [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) has the details with links to the code.
-- **Keys** stay in one macOS Keychain item that never syncs to other devices.
+- **Keys** stay on this Mac in a private file only your user account can open (no password dialog after updates). It never syncs to other devices and is left out of backups.
 - **Updates** install only on your click, and only if the new app is signed with the same certificate as yours. Each release names the commit it was built from and lists a SHA-256 checksum.
+- **Beware of scams.** Never post your API key in an issue or anywhere else; Soyla and its author will never ask for it. The only official download is this repository's [Releases](https://github.com/ShamsiddinKomil/soyla/releases): check the zip with its `.sha256` file and compare the signing-certificate fingerprint printed in the release notes ([how](docs/INSTALL.md#1-download-and-install)).
 - **Found a problem?** Report it privately: [SECURITY.md](SECURITY.md).
 
 ## How it works

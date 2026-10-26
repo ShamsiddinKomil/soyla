@@ -52,7 +52,7 @@ struct SetupStrings: Sendable {
 
     let tTitle, tSub: String
     let tReadIn: [SpokenLanguage: String]
-    let tPh, tListen, tWrite, tShort, tOk, tNote: String
+    let tPh, tListen, tWrite, tShort, tOk: String
     let tSeconds: String
     let tLocal: String
     let tCloud: @Sendable (String) -> String
@@ -194,7 +194,7 @@ extension SetupStrings {
             cTitle: { "Connect \(subj[$0] ?? "")" }, cSub: "One API key, added once.", cInfo: "About the two services",
             cTip: ["**Google AI Studio** is free to start. On the free tier Google may use your audio to improve its models; a paid key keeps it out.",
                    "**OpenRouter** is pay as you go, about $0.005 per 40 seconds of speech. Best for sentences that mix languages.",
-                   "Your key stays in this Mac’s Keychain."],
+                   "Your key stays on this Mac, in a file only your user account can open."],
             cG: "Free to start", cO: "Pay as you go", cS1: "Create an API key", cOpen: { "Open \($0)" },
             cPh: "Paste the API key", cKeyAria: "API key", cConnect: "Connect", cConnected: "Connected",
             cOk: "Connected.", cChecking: "Checking…", cOpened: "Opened in your browser.", cSkip: "Skip for now",
@@ -202,7 +202,7 @@ extension SetupStrings {
             tTitle: "Try it once", tSub: "Hold {key}, read this aloud, let go.",
             tReadIn: [.en: "Read in English", .uz: "Read in Uzbek", .ru: "Read in Russian"],
             tPh: "Your words appear here", tListen: "Listening…", tWrite: "Writing…", tShort: "Hold a little longer.",
-            tOk: "Works in every app.", tNote: "Hold, speak, let go.", tSeconds: "s",
+            tOk: "Works in every app.", tSeconds: "s",
             tLocal: "on this Mac", tCloud: { "via \($0)" },
             dnTitle: "Soyla is ready", dnSub: "Hold {key} in any app.",
             dnMore: { "One more step for \(subj[$0] ?? "")" }, dnMoreSub: "English works now.",
@@ -213,7 +213,7 @@ extension SetupStrings {
                       .wrongProvider: "That key is for the other service. Pick it above.",
                       .rejected: "That key didn’t work. Check it and try again.",
                       .unreachable: "Couldn’t reach the service. Check the internet and try again.",
-                      .notSaved: "Couldn’t save the key to the Keychain."],
+                      .notSaved: "Couldn’t save the key on this Mac."],
             pFnInput: "Now switches input source", pFnDictation: "Now starts Dictation",
             pIm: "Notice the {key} key", pImC: "Input Monitoring",
             tNoKeys: "Soyla can’t hear the {key} key yet.", tModelWait: "Getting English ready on this Mac…",
@@ -255,10 +255,10 @@ extension SetupStrings {
             hAxT: "Soyla’ni yoqing", hAxB: "macOS parol so‘rashi mumkin. Bu eslatma o‘zi yopiladi.",
             hMissing: "Soyla ro‘yxatda yo‘q", hMissingT: "+ bilan qo‘shing", hMissingB: "Applications’dan Soyla’ni tanlab, yoqing.",
             hFnT: "«Do Nothing»’ni tanlang", hFnB: "Bu eslatma o‘zi yopiladi.",
-            cTitle: { "\(SetupStrings.cap1(subj[$0] ?? "")) uchun API key ulang" }, cSub: "Bitta API key, bir marta qo‘shiladi.", cInfo: "Ikki xizmat haqida",
+            cTitle: { "\(SetupStrings.cap1(subj[$0] ?? "")) uchun API\u{00A0}key ulang" }, cSub: "Bitta API key, bir marta qo‘shiladi.", cInfo: "Ikki xizmat haqida",
             cTip: ["**Google AI Studio**’da boshlash bepul. Bepul tarifda Google ovozingizdan o‘z modellarini yaxshilashda foydalanishi mumkin; pullik API key’da bunday bo‘lmaydi.",
                    "**OpenRouter**’da ishlatganingizga yarasha to‘laysiz: 40 soniya nutq taxminan $0,005. Aralash tilli gaplar uchun eng yaxshisi.",
-                   "API key shu Mac’ning Keychain’ida saqlanadi."],
+                   "API key shu Mac’da, faqat sizning foydalanuvchi hisobingiz ocha oladigan faylda saqlanadi."],
             cG: "Boshlash bepul", cO: "Ishlatganingizga yarasha to‘lov", cS1: "API key yarating", cOpen: { "\($0) saytini ochish" },
             cPh: "API key’ni shu yerga qo‘ying", cKeyAria: "API key", cConnect: "Ulash", cConnected: "Ulandi",
             cOk: "Ulandi.", cChecking: "Tekshirilmoqda…", cOpened: "Brauzerda ochildi.", cSkip: "Hozircha o‘tkazib yuborish",
@@ -266,7 +266,7 @@ extension SetupStrings {
             tTitle: "Bir marta sinab ko‘ring", tSub: "{key}’ni bosib turing, buni o‘qing, qo‘yib yuboring.",
             tReadIn: [.en: "Ingliz tilida o‘qing", .uz: "O‘zbek tilida o‘qing", .ru: "Rus tilida o‘qing"],
             tPh: "So‘zlaringiz shu yerda chiqadi", tListen: "Tinglayapman…", tWrite: "Yozyapman…", tShort: "Biroz uzoqroq bosib turing.",
-            tOk: "Har qanday ilovada ishlaydi.", tNote: "Bosib turing, gapiring, qo‘yib yuboring.", tSeconds: "s",
+            tOk: "Har qanday ilovada ishlaydi.", tSeconds: "s",
             tLocal: "shu Mac’da", tCloud: { "\($0) orqali" },
             dnTitle: "Soyla tayyor", dnSub: "Istalgan ilovada {key}’ni bosib turing.",
             dnMore: { "\(SetupStrings.cap1(subj[$0] ?? "")) uchun yana bir qadam" }, dnMoreSub: "Ingliz tili hozir ishlaydi.",
@@ -278,7 +278,7 @@ extension SetupStrings {
                       .wrongProvider: "Bu API key boshqa xizmatniki. Uni yuqorida tanlang.",
                       .rejected: "Bu API key ishlamadi. Tekshirib, qayta urinib ko‘ring.",
                       .unreachable: "Xizmatga ulanib bo‘lmadi. Internetni tekshirib, qayta urinib ko‘ring.",
-                      .notSaved: "API key Keychain’ga saqlanmadi."],
+                      .notSaved: "API key shu Mac’da saqlanmadi."],
             pFnInput: "Hozir klaviatura tilini almashtiradi", pFnDictation: "Hozir Dictation’ni yoqadi",
             pIm: "{key} tugmasini sezish", pImC: "Input Monitoring",
             tNoKeys: "Soyla hali {key} tugmasini sezmayapti.", tModelWait: "Ingliz tili shu Mac’da tayyorlanmoqda…",
@@ -323,7 +323,7 @@ extension SetupStrings {
             cTitle: { "Подключите \(acc[$0] ?? "")" }, cSub: "Один API-ключ, подключается один раз.", cInfo: "О двух сервисах",
             cTip: ["У **Google AI Studio** есть бесплатный тариф. На нём Google может использовать ваш звук для улучшения моделей; с платным ключом этого нет.",
                    "**OpenRouter**: оплата по факту, около $0,005 за 40 секунд речи. Лучше всего для фраз на смеси языков.",
-                   "Ключ хранится в Связке ключей этого Mac."],
+                   "Ключ хранится на этом Mac, в файле, который может открыть только ваша учётная запись."],
             cG: "Бесплатно для начала", cO: "Оплата по факту", cS1: "Создайте API-ключ", cOpen: { "Открыть \($0)" },
             cPh: "Вставьте API-ключ", cKeyAria: "API-ключ", cConnect: "Подключить", cConnected: "Подключено",
             cOk: "Подключено.", cChecking: "Проверяем…", cOpened: "Открыто в браузере.", cSkip: "Пока пропустить",
@@ -331,7 +331,7 @@ extension SetupStrings {
             tTitle: "Попробуйте один раз", tSub: "Зажмите {key}, прочитайте вслух, отпустите.",
             tReadIn: [.en: "Читайте по-английски", .uz: "Читайте по-узбекски", .ru: "Читайте по-русски"],
             tPh: "Здесь появятся ваши слова", tListen: "Слушаю…", tWrite: "Пишу…", tShort: "Держите чуть дольше.",
-            tOk: "Работает в любом приложении.", tNote: "Зажмите, скажите, отпустите.", tSeconds: "с",
+            tOk: "Работает в любом приложении.", tSeconds: "с",
             tLocal: "на этом Mac", tCloud: { "через \($0)" },
             dnTitle: "Soyla готова", dnSub: "Зажмите {key} в любом приложении.",
             dnMore: { "Ещё один шаг для \(gen[$0] ?? "")" }, dnMoreSub: "Английский уже работает.",
@@ -343,7 +343,7 @@ extension SetupStrings {
                       .wrongProvider: "Это ключ другого сервиса. Выберите его выше.",
                       .rejected: "Ключ не подошёл. Проверьте его и попробуйте снова.",
                       .unreachable: "Не удалось связаться с сервисом. Проверьте интернет и попробуйте снова.",
-                      .notSaved: "Не удалось сохранить ключ в Связке ключей."],
+                      .notSaved: "Не удалось сохранить ключ на этом Mac."],
             pFnInput: "Сейчас переключает раскладку", pFnDictation: "Сейчас включает диктовку",
             pIm: "Слышать клавишу {key}", pImC: "Input Monitoring",
             tNoKeys: "Soyla пока не слышит клавишу {key}.", tModelWait: "Готовим английский на этом Mac…",

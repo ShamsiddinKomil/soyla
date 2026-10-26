@@ -99,12 +99,17 @@ On the Languages page you can also:
 - Pick the **Cloud** service (Google AI Studio or OpenRouter), and **Replace…** or remove its **API key**.
 - Pick the **Model** (Cloud only). The Flash model is more exact; Lite is faster.
 
-### Mainly speak
+### My languages and Mainly speak
+
+Settings, Dictation, **My languages**: tick the languages you speak (all three by default). Soyla tells the model
+you speak only these, and checks the text: if it comes back in an alphabet none of them uses (for example Cyrillic
+when Russian is unticked), Soyla asks once more. Keep all three for mixed speech. When not all three are ticked, a
+small label on the pill (such as **RU** or **UZ·EN**) shows the set while you record.
 
 Settings, Dictation, **Mainly speak**:
 
 - **Auto-detect** (default) handles mixed sentences.
-- **Uzbek**, **Russian** or **English** is a hint. Pick one only if Soyla keeps guessing wrong; other languages you speak are still kept.
+- **Uzbek**, **Russian** or **English** (only the ticked ones) is a hint. Pick one only if Soyla keeps guessing wrong; other languages you speak are still kept.
 
 For mixed Uzbek and Russian, OpenRouter is the more reliable service ([Keys](KEYS.md)).
 
@@ -122,6 +127,7 @@ Click the Soyla icon at the top of your screen. From top to bottom:
 - **Warnings and one fix, only when needed.** For example *Hotkey not active: check permissions*, *Secure Input is on: paste disabled*, or a single button such as **Allow the Microphone…** or **Connect Uzbek…**.
 - **Open Soyla.**
 - **Paste Last Dictation** (⌘⌃V) and **Copy Last Dictation** (⌘⌃C).
+- **Correction pass: Raw** (or Light): opens a small menu to switch. Hidden on the free engine, which has no correction pass.
 - **Settings…** (⌘,).
 - **Setup Assistant…** and **Report a Problem…**.
 - **Quit Soyla** (⌘Q).
@@ -144,10 +150,10 @@ When a new version is available, an update line appears at the very top.
 
 After the words are recognised, Soyla can tidy them. Choose in Settings, Dictation, **Correction pass** (Cloud only):
 
-- **Off** (default): pastes the text exactly as heard. Hesitation sounds (a-a, m-m, э-э, uh) are still removed, without an extra model call.
+- **Raw** (default; called Off in older versions): pastes what the speech model heard, plus your dictionary. Hesitation sounds (a-a, m-m, э-э, uh) are still removed, without an extra model call.
 - **Light:** removes repeated words and fillers and applies self-corrections such as "at three, no, at four". Adds about 1.8 seconds and a small cost. Very short dictations skip it.
 
-The original, uncorrected text is always kept in History. If the correction ever looks wrong or the service is busy, Soyla pastes the original instead.
+You can switch between Raw and Light without opening Settings: menu bar icon, **Correction pass**, then **Raw** or **Light** (also on the right-click menu of the pill). The original, uncorrected text is always kept in History. If the correction ever looks wrong or the service is busy, Soyla pastes the original instead; the pill says "Pasted as heard (cleanup skipped)" the first time that happens each day, and History shows it on that card every time.
 
 ## Personal dictionary
 
@@ -169,9 +175,9 @@ Open Soyla and choose **History** in the sidebar (or press ⌘2 while Soyla is i
 ![History: a search box, then one card per dictation with its time, app, length, text and a Copy button](media/history.png)
 
 - **Search** finds words in your past dictations.
-- **Cleaned / Raw** appears when a dictation has corrected text. It switches between the corrected text and the original.
+- **Cleaned / Raw** appears when a dictation has corrected text. It switches between the corrected text and the original. In the cleaned view, words the correction removed are struck through and words it added or changed are highlighted; a **Cleaned** tag marks every card where the correction ran and changed the text (not Raw runs, where only the dictionary or a filler removal differs).
 - Each card shows when you dictated, in which app and for how long. A colored status (**Working**, **Failed**, **Cancelled** or **Interrupted**) appears only when something other than success happened.
-- Buttons per card: **Copy**, and, while the recording is still on your Mac, **Play** and **Retry**. Retry can also use another model. Retry from History only copies the result; it never pastes into whatever app you happen to be in.
+- Buttons per card: **Copy**, and, while the recording is still on your Mac, **Play** and **Retry**. Retry can also use another model, or **Retry as** one language (Uzbek, Russian, English, or My languages) when Soyla picked the wrong one: right-click Retry. Retry from History only copies the result; it never pastes into whatever app you happen to be in.
 - How long recordings stay is set in [Keep recordings](PRIVACY_AND_COST.md#recordings-on-your-mac).
 
 ## Sounds

@@ -42,8 +42,10 @@ private final class TimedSTT: TranscriptionProvider, Sendable {
 
     @Test func earlyRealErrorIsNotRetried() async {
         let p = TimedSTT([0.01], fail: [0])
+        // A 2 s backup delay, not 0.3 s: under a loaded parallel test run the 10 ms primary sometimes took longer than
+        // 0.3 s and the backup fired first (about 1 run in 8; owner approved widening it, 2026-10-26).
         await #expect(throws: SoylaError.self) {
-            try await HedgedProvider(p, delay: { _ in 0.3 }).transcribe(audio, options: opts, timeline: RunTimeline())
+            try await HedgedProvider(p, delay: { _ in 2.0 }).transcribe(audio, options: opts, timeline: RunTimeline())
         }
         #expect(p.calls == 1)
     }

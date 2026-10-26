@@ -31,7 +31,7 @@ Apple's on-device engine does English only. The models that handle Uzbek, Russia
 No. It listens for one key (your hotkey) and records the microphone only while you hold it. It does not read your screen or log what you type. What it can and cannot do is written out in the [security model](SECURITY_MODEL.md).
 
 **Where is my data?**
-On your Mac, in `~/Library/Application Support/Soyla/`, and your keys in the macOS Keychain. Nothing goes to the Soyla author; there is no telemetry. Details: [Privacy and cost](PRIVACY_AND_COST.md).
+On your Mac, in `~/Library/Application Support/Soyla/`, including your keys (`keys.json`, readable by your user only). Nothing goes to the Soyla author; there is no telemetry. Details: [Privacy and cost](PRIVACY_AND_COST.md).
 
 **Does my voice get used to train AI?**
 Soyla itself never uses it. But **Google AI Studio free-tier keys let Google train on your audio**, so use a paid key for confidential speech. See [Privacy and cost](PRIVACY_AND_COST.md#free-tier-warning). With **On this Mac**, your audio never leaves the Mac.
@@ -45,7 +45,7 @@ Yes: Settings, Hotkey, **Hold to talk**: fn, Right ⌥, Right ⌘, Right ⌃, �
 Not yet. The first open of each version needs one extra click, **Open Anyway** ([Install](INSTALL.md#2-first-open-open-anyway-one-time-per-version)). The code is open, so you can read it or build it yourself.
 
 **How do I uninstall it?**
-Quit Soyla, drag it to the Trash, and optionally delete `~/Library/Application Support/Soyla`, the Soyla items in Keychain Access, and its entries under Accessibility and Input Monitoring. Apple's on-device English model belongs to macOS, so it stays and is not part of Soyla. Steps: [Install, Uninstall](INSTALL.md#6-uninstall).
+Quit Soyla, drag it to the Trash, and optionally delete `~/Library/Application Support/Soyla` (this also deletes your keys), and its entries under Accessibility and Input Monitoring. Apple's on-device English model belongs to macOS, so it stays and is not part of Soyla. Steps: [Install, Uninstall](INSTALL.md#6-uninstall).
 
 ## Quality
 
@@ -53,7 +53,7 @@ Quit Soyla, drag it to the Trash, and optionally delete `~/Library/Application S
 In our tests the default setup kept both languages on a 41-second Uzbek and Russian clip in 7 of 7 runs. It is not perfect: names, rare words and noisy rooms can go wrong. Use the personal dictionary for names, and the original text is always kept in History ([Using Soyla](USAGE.md#personal-dictionary)).
 
 **Can Soyla tidy my text?**
-Yes, with the Cloud. The **Correction pass** is Off by default, so text is pasted exactly as heard. Settings, Dictation, **Correction pass**: **Light** removes repeats and applies self-corrections ("at three, no, at four"), about 1.8 s slower. The original is kept in History either way.
+Yes, with the Cloud. The **Correction pass** is **Raw** by default, so the text is pasted as the speech model heard it (plus your dictionary). Settings, Dictation, **Correction pass**: **Light** removes repeats and applies self-corrections ("at three, no, at four"), about 1.8 s slower. The original is kept in History either way.
 
 **Can I use it in Terminal or in a password field?**
 Soyla can paste into Terminal unless **Secure Keyboard Entry** is on. macOS blocks pasting into password fields, so there the text stays on the clipboard for you to paste yourself ([Troubleshooting](TROUBLESHOOTING.md#text-went-to-the-clipboard-only)).

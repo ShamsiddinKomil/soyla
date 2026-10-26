@@ -1,8 +1,11 @@
 # Soyla long test scripts (phrases 6–10)
 
 Read each one at a **natural pace** (don't slow down for the machine). Target lengths are for normal speech;
-all stay under the 45 s warning. Before each recording, tag it in the menu bar 🎙 → **Tag next run as → phrase N**.
-Recommended: record each script **3 times**, once with Language hint = auto and twice with **uz**.
+all stay under the 45 s warning that applies with *Transcribe while speaking* off (with it on, the limit is 5 min).
+Before each recording, tag it: switch on **Developer mode** (Settings → Developer), then use the menu bar icon →
+**Tag next run as → phrase N** (or Settings → Developer → **Tag next run as phrase**). The item is hidden without Developer mode.
+Recommended: record each script **3 times**, once with **Mainly speak** = Auto-detect and twice with **Uzbek**
+(Settings → Dictation → Mainly speak; stored as `languageHint`).
 
 Accuracy is scored automatically against the text below: `python3 scripts/score.py` (word error rate per run).
 The text between the ``` fences is the reference — edit it if you deliberately change wording.
@@ -27,7 +30,7 @@ Kecha mijoz bilan gaplashdim, ular shartnomani imzolashga tayyor, но есть 
 ```
 
 Tests: Russian must stay **Cyrillic**, Uzbek must stay **Latin**, switches mid-sentence. This is the one most likely
-to break with Language hint = uz — compare auto vs uz here.
+to break with Mainly speak = Uzbek — compare Auto-detect vs Uzbek here.
 
 ## Phrase 8 — Uzbek + English tech terms (~35 s)
 

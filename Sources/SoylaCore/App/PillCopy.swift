@@ -47,7 +47,8 @@ extension PillFailure {
         let t = AppStrings.for(l)
         var f = localized(l)
         f.kind = .info
-        let combo: CloudCombo? = if case .needsKey(let c, _) = readiness { c } else { nil }
+        // D22: when English waits too, the card names Soyla, not only the cloud languages.
+        let combo: CloudCombo? = if case .needsKey(let c, _, false) = readiness { c } else { nil }
         f.title = combo.map(t.pillKey) ?? t.keyTitle
         f.hint = readiness.englishWorks && combo != nil ? t.pillKeyHint : PillCopy.text(hint, l)
         return f
@@ -96,12 +97,15 @@ enum PillCopy {
         "No speech heard": ("Nutq eshitilmadi", "Речь не услышана"),
         "Didn't catch that": ("Eshitolmadim", "Не расслышал"),
         "The server sent an odd reply": ("Server g‘alati javob qaytardi", "Сервер прислал странный ответ"),
+        "This server needs https": ("Bu serverga https kerak", "Этому серверу нужен https"),
+        "Change its address in Languages → Custom.": ("Manzilini Tillar → Custom’da o‘zgartiring.", "Измените адрес в Языки → Custom."),
         "Not pasted: it's on your clipboard": ("Qo‘yilmadi: matn clipboard’da", "Не вставлено: текст в буфере обмена"),
         "Microphone problem": ("Mikrofonda muammo", "Проблема с микрофоном"),
         "Something went wrong": ("Nimadir xato ketdi", "Что-то пошло не так"),
         "Speaking Uzbek or Russian?": ("O‘zbek yoki rus tilida gapiryapsizmi?", "Говорите по-узбекски или по-русски?"),
         "English model not ready": ("Ingliz tili modeli tayyor emas", "Английская модель не готова"),
         "Allow Speech Recognition in Settings": ("Speech Recognition’ga ruxsat bering", "Разрешите Speech Recognition"),
+        "Pasted as heard (cleanup skipped)": (AppStrings.uz.d.rsSkipped, AppStrings.ru.d.rsSkipped),
         "On-device engine unavailable": ("Shu Mac’da tanib olish ishlamayapti", "Распознавание на этом Mac недоступно"),
         // hints
         "Nothing was pasted. Retry, or say it again.": ("Hech narsa qo‘yilmadi. Qayta yuboring yoki yana ayting.",

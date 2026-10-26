@@ -81,11 +81,13 @@ public final class OpenRouterSTTProvider: TranscriptionProvider, Sendable {
         model.hasPrefix(chatPrefix) ? String(model.dropFirst(chatPrefix.count)) : model
     }
 
-    /// The verbatim prompt + vocabulary + language hint. Shared with GoogleAIProvider so both routes behave the same.
-    static func transcriptionPrompt(_ options: TranscribeOptions) -> String {
+    /// The verbatim prompt + vocabulary + language hint + the language-set lines (D26b; `durationSec` < 2 s adds the
+    /// short-clip line). Shared with GoogleAIProvider so both routes behave the same. The retry line stays last.
+    static func transcriptionPrompt(_ options: TranscribeOptions, durationSec: Double? = nil) -> String {
         var prompt = chatPrompt
         if !options.vocabulary.isEmpty { prompt += "\nPreferred spellings for names and terms: " + options.vocabulary.joined(separator: ", ") }
         if let l = options.languageHint, !l.isEmpty { prompt += "\nThe main language is \(l), but keep every other language exactly as spoken." }
+        for line in LanguagePrompt.lines(languages: options.languages, durationSec: durationSec) { prompt += "\n" + line }
         if let x = options.extraInstruction, !x.isEmpty { prompt += "\n" + x }
         return prompt
     }
@@ -106,10 +108,11 @@ public final class OpenRouterSTTProvider: TranscriptionProvider, Sendable {
     """
 
     static func makeChatBody(_ audio: EncodedAudio, options: TranscribeOptions) throws -> Data {
-        let prompt = transcriptionPrompt(options)
+        let prompt = transcriptionPrompt(options, durationSec: audio.durationSec)
         let body: [String: Any] = [
             "model": plainModel(options.model),
             "temperature": 0,
+            "max_tokens": TextGuards.sttMaxTokens(durationSec: audio.durationSec) * max(1, options.maxTokensScale),
             "reasoning": ["effort": "minimal"],
             "messages": [["role": "user", "content": [
                 ["type": "text", "text": prompt],
@@ -126,6 +129,14 @@ public final class OpenRouterSTTProvider: TranscriptionProvider, Sendable {
         var usage: U?
     }
 
+    /// `choices[0].finish_reason`: OpenRouter normalises it to stop | length | tool_calls | content_filter | error
+    /// (openrouter.ai/docs/api-reference/overview, read 2026-10-26). "length" = cut off by `max_tokens`.
+    static func chatFinishReason(_ data: Data) -> String? {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let first = (obj["choices"] as? [[String: Any]])?.first else { return nil }
+        return first["finish_reason"] as? String
+    }
+
     static func decodeChat(_ data: Data) throws -> (text: String, usage: Usage?) {
         let d = JSONDecoder(); d.keyDecodingStrategy = .convertFromSnakeCase
         do {
@@ -137,12 +148,21 @@ public final class OpenRouterSTTProvider: TranscriptionProvider, Sendable {
         }
     }
 
+    /// The request for either route. OpenRouter's timeout scales with the clip (`TextGuards.sttTimeoutSec`); a custom
+    /// server keeps the full `options.timeoutSec`, since a local model on a CPU can legitimately take that long.
+    static func makeRequest(_ audio: EncodedAudio, options: TranscribeOptions, apiKey: String, baseURL: String) throws -> URLRequest {
+        let chat = usesChatRoute(options.model)
+        var plain = options; plain.model = plainModel(options.model)
+        let body = chat ? try makeChatBody(audio, options: plain) : try makeBody(audio, options: plain)
+        let timeout = baseURL == OpenRouterHTTP.base
+            ? TextGuards.sttTimeoutSec(durationSec: audio.durationSec, cap: options.timeoutSec) : options.timeoutSec
+        return try OpenRouterHTTP.request(chat ? "/chat/completions" : "/audio/transcriptions", method: "POST", apiKey: apiKey,
+                                          body: body, timeout: timeout, baseURL: baseURL)
+    }
+
     public func transcribe(_ audio: EncodedAudio, options: TranscribeOptions, timeline: RunTimeline) async throws -> TranscriptResult {
         let chat = Self.usesChatRoute(options.model)
-        var plain = options; plain.model = Self.plainModel(options.model)
-        let body = chat ? try Self.makeChatBody(audio, options: plain) : try Self.makeBody(audio, options: plain)
-        let path = chat ? "/chat/completions" : "/audio/transcriptions"
-        let req = try OpenRouterHTTP.request(path, method: "POST", apiKey: apiKey, body: body, timeout: options.timeoutSec, baseURL: baseURL)
+        let req = try Self.makeRequest(audio, options: options, apiKey: apiKey, baseURL: baseURL)
         let collector = MetricsCollector()
         timeline.mark(.requestSent)
         let data: Data
@@ -161,8 +181,10 @@ public final class OpenRouterSTTProvider: TranscriptionProvider, Sendable {
             throw SoylaError.http(status: http.statusCode, body: OpenRouterHTTP.bodyPrefix(data, redacting: apiKey))
         }
         let (text, usage) = chat ? try Self.decodeChat(data) : try Self.decode(data)
-        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { throw SoylaError.emptyTranscript }
+        let finish = chat ? Self.chatFinishReason(data) : nil
+        if ScriptCheck.emptyIsNoSpeech(text, finishReason: finish) { throw SoylaError.emptyTranscript }
         var meta: [String: String] = ["http_status": "\(http.statusCode)", "provider": id]
+        if let finish { meta["finish_reason"] = finish }
         if let g = http.value(forHTTPHeaderField: "X-Generation-Id") { meta["generation_id"] = g }
         // Which upstream served it (OpenRouter's top-level "provider", e.g. "Google AI Studio" vs "Google" = Vertex).
         if let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let up = root["provider"] as? String { meta["upstream"] = up }

@@ -68,7 +68,7 @@ import Foundation
 
     @Test func uzbekSaysIndikatorEnglishKeepsPill() {
         #expect(AppStrings.uz.page[.pill] == "Indikator" && AppStrings.en.page[.pill] == "Pill")
-        #expect(!AppStrings.uz.plPosI.contains("pill") && !AppStrings.uz.d.pcLockedHint("fn").contains("pill"))
+        #expect(!AppStrings.uz.plPosI.contains("pill"))
         #expect(AppStrings.uz.page[.hotkey] == "Tezkor tugma")
     }
 

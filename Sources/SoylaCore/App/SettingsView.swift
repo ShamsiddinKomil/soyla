@@ -47,8 +47,8 @@ public final class SettingsModel: ObservableObject {
     }
 }
 
-/// Settings → Engine: per-provider key state. Values stay in the Keychain; the UI only ever sees `Secrets.masked`.
-/// One path: paste (or type) → saved to the Keychain → checked with the provider right away. No separate Test step.
+/// Settings → Engine: per-provider key state. Values stay in the key file; the UI only ever sees `Secrets.masked`.
+/// One path: paste (or type) → saved to the key file → checked with the provider right away. No separate Test step.
 @MainActor
 final class APIKeysModel: ObservableObject {
     private var loadObserver: NSObjectProtocol?
@@ -143,7 +143,7 @@ final class APIKeysModel: ObservableObject {
             setMessage(p, problem, ok: false)
             return false
         }
-        // A key from the Keychain/key file that this one replaces: put back if the service rejects the new one.
+        // A saved key (key file) that this one replaces: put back if the service rejects the new one.
         let old = Secrets.find(p).flatMap { $0.source == .keychain && $0.value != v ? $0.value : nil }
         let oldVerified = old.map { Secrets.isVerified(p, key: $0) } ?? false
         do {
@@ -153,7 +153,7 @@ final class APIKeysModel: ObservableObject {
             setMessage(p, nil, ok: true)
         } catch {
             Log.info("key save failed: \(p.rawValue) \(error.localizedDescription)")
-            setMessage(p, "Couldn't save to the Keychain: \(error.localizedDescription)", ok: false)
+            setMessage(p, "Couldn't save the key: \(error.localizedDescription)", ok: false)
             return false
         }
         refresh(); onChange?(p)
@@ -410,34 +410,6 @@ struct KeyCard: View {
     }
 }
 
-/// Settings → Engine: one key card per provider, plus where keys live.
-struct APIKeysSection: View {
-    @ObservedObject var keys: APIKeysModel
-    var providers: [KeyProvider] = KeyProvider.allCases
-    /// When set (Settings page), each card says whether dictation uses it and can switch to it.
-    var settings: SettingsModel? = nil
-
-    /// The provider dictation uses goes first.
-    private var ordered: [KeyProvider] {
-        guard let used = settings?.s.provider.keyProvider else { return providers }
-        return providers.filter { $0 == used } + providers.filter { $0 != used }
-    }
-
-    var body: some View {
-        ForEach(ordered) { p in
-            if let settings {
-                KeyCard(keys: keys, provider: p, inUse: settings.s.provider.keyProvider == p,
-                        onUse: { settings.useProvider(p) }, language: settings.s.uiLanguage)
-            } else {
-                KeyCard(keys: keys, provider: p)
-            }
-        }
-        Text("Keys are stored in your macOS Keychain on this Mac only. Soyla never logs them."
-             + (providers.contains(.google) ? " Free-tier Google keys let Google train on your audio." : ""))
-            .font(Ink.Font.caption).foregroundStyle(Ink.text2).fixedSize(horizontal: false, vertical: true)
-    }
-}
-
 extension ProviderKind {
     var keyProvider: KeyProvider? { switch self { case .openRouter: return .openRouter; case .google: return .google; case .custom: return .custom; case .apple: return nil } }
 }
@@ -476,7 +448,7 @@ enum ModelNames {
 public struct SettingsView: View {
     @ObservedObject var m: SettingsModel
     @StateObject private var keys = APIKeysModel()
-    let status: AppStatus?
+    let status: AppStatus
     /// Opens the Setup Assistant (wired by the main window).
     var onSetupAssistant: (() -> Void)? = nil
     /// APP-1 (b): setup at one step, and setup's Connect for one service (the Languages page).
@@ -486,7 +458,6 @@ public struct SettingsView: View {
     let page: SettingsPage
     /// P5: the one-time "switch engine?" offer after a key is added (while free) or removed (while on Cloud).
     @State private var switchPrompt: EngineSwitchPrompt?
-    public init(model: SettingsModel, page: SettingsPage = .dictation) { self.m = model; self.status = nil; self.page = page }
     init(model: SettingsModel, status: AppStatus, page: SettingsPage, onSetupAssistant: (() -> Void)? = nil,
          openSetup: @escaping (SetupStep) -> Void = { _ in }, connectFor: @escaping (KeyProvider) -> Void = { _ in },
          connect: InlineConnectModel? = nil) {
@@ -494,37 +465,31 @@ public struct SettingsView: View {
         self.openSetup = openSetup; self.connectFor = connectFor; self.connect = connect
     }
 
-    static let languages: [(String?, String)] = [(nil, "Auto-detect"), ("uz", "Uzbek (uz)"), ("ru", "Russian (ru)"), ("en", "English (en)")]
-
     public var body: some View {
         Group {
-            if let status {
-                switch page {
-                case .apiKeys:
-                    LanguagesPage(m: m, keys: keys, status: status, openSetup: openSetup,
-                                  connect: connect ?? InlineConnectModel(settings: m, status: status))
-                case .permissions: PermissionsPage(m: m, status: status, openSetup: openSetup)
-                case .dictation: DictationPage(m: m)
-                case .hotkey: HotkeyPage(m: m)
-                case .pill: PillPage(m: m)
-                case .privacy: PrivacyPage(m: m, status: status)
-                case .about: AboutPage(m: m, onSetupAssistant: onSetupAssistant)
-                case .developer: DeveloperPage(m: m)
-                }
-            } else {
-                classicPage
+            switch page {
+            case .apiKeys:
+                LanguagesPage(m: m, keys: keys, status: status, openSetup: openSetup,
+                              connect: connect ?? InlineConnectModel(settings: m, status: status))
+            case .permissions: PermissionsPage(m: m, status: status, openSetup: openSetup)
+            case .dictation: DictationPage(m: m)
+            case .hotkey: HotkeyPage(m: m)
+            case .pill: PillPage(m: m)
+            case .privacy: PrivacyPage(m: m, status: status)
+            case .about: AboutPage(m: m, onSetupAssistant: onSetupAssistant)
+            case .developer: DeveloperPage(m: m)
             }
         }
         .onAppear {
             m.loadModels(); keys.refresh()
             keys.onChange = { [m, status] p in
                 if p == .openRouter { m.refreshKeyStatus(); m.loadModels() }
-                status?.refresh()
+                status.refresh()
                 evaluateSwitchPrompt()
             }
         }
         // Keys now arrive through setup's Connect (its own APIKeysModel): re-read them here, then make the P5 offer.
-        .onChange(of: status?.keys) { _, _ in keys.refresh(); evaluateSwitchPrompt() }
+        .onChange(of: status.keys) { _, _ in keys.refresh(); evaluateSwitchPrompt() }
         .alert(switchPrompt?.title(m.s.uiLanguage) ?? "", isPresented: Binding(get: { switchPrompt != nil }, set: { if !$0 { switchPrompt = nil } }),
                presenting: switchPrompt) { p in
             Button(p.confirmTitle(m.s.uiLanguage)) {
@@ -535,27 +500,6 @@ public struct SettingsView: View {
             }
             Button(p.declineTitle(m.s.uiLanguage), role: .cancel) {}
         } message: { p in Text(p.message(m.s.uiLanguage)) }
-    }
-
-    private var classicPage: some View {
-        DocsScrollView {
-            VStack(alignment: .leading, spacing: Ink.s6) {
-                PageHeader(title: page.title, purpose: page.purpose)
-                switch page {
-                case .permissions:
-                    if let status { PermissionsGroup(status: status, provider: m.s.provider) } else { Text("Permissions are shown in the app.").foregroundStyle(Ink.text2) }
-                case .apiKeys:
-                    EnginePage(m: m, keys: keys, status: status)
-                case .dictation: DictationSection(m: m)
-                case .hotkey: hotkeyPage
-                case .pill: pillPage
-                case .privacy: PrivacySection(m: m)
-                case .about: AboutSection(m: m, onSetupAssistant: onSetupAssistant)
-                case .developer: DeveloperSection(m: m)
-                }
-            }
-            .pageColumn()
-        }
     }
 
     /// Decides from the current keys; each offer is made at most once (persisted), and never switches by itself.
@@ -571,101 +515,14 @@ public struct SettingsView: View {
         flags.markAsked(p)
         switchPrompt = p
     }
-
-    @ViewBuilder private var hotkeyPage: some View {
-        let k = m.s.hotkey.shortLabel
-        SettingsGroup(footer: m.s.hotkey == .fn
-                      ? "Set System Settings → Keyboard → “Press 🌐 key to” → Do Nothing, and quit other dictation apps while testing."
-                      : nil) {
-            Row(label: "Hold to talk") {
-                Picker("Hold to talk", selection: $m.s.hotkey) {
-                    ForEach(HotkeyChoice.allCases, id: \.self) { Text($0.label).tag($0) }
-                }.pickerStyle(.menu).rowControl()
-            }
-            WideRow(divider: false) {
-                KeyHint(keys: [k], action: "hold, speak, let go to paste. A quick tap does nothing.")
-                KeyHint(keys: [k, k], action: "double-tap locks hands-free; press \(k) again or click the pill to finish.")
-                KeyHint(keys: ["esc"], action: "cancels while recording or transcribing; nothing is pasted.")
-            }
-        }
-        SettingsGroup(title: "Where the text goes") {
-            Row(label: "Paste into the focused app", caption: "Off: the text is only copied to the clipboard.", divider: false) {
-                Toggle("Paste into the focused app", isOn: $m.s.pasteEnabled).toggleStyle(.app).controlSize(.small).rowControl()
-            }
-        }
-    }
-
-    @ViewBuilder private var pillPage: some View {
-        SettingsGroup(title: "Position") {
-            WideRow {
-                HStack(alignment: .center, spacing: Ink.s6) {
-                    PillScreenMap(position: m.s.pillPosition, anchor: m.s.pillAnchor) { spot in
-                        let v = spot.setting
-                        m.s.pillPosition = v.position; m.s.pillAnchor = v.anchor
-                    }
-                    VStack(alignment: .leading, spacing: Ink.s3) {
-                        Text(PillSpot.from(position: m.s.pillPosition, anchor: m.s.pillAnchor)?.label ?? "Your own spot")
-                            .font(Ink.Font.subhead).foregroundStyle(Ink.text)
-                        Text("Click a spot on the screen. Or put the pill exactly where you want it: click Place on screen, then drag it.")
-                            .font(Ink.Font.caption).foregroundStyle(Ink.text2).fixedSize(horizontal: false, vertical: true)
-                        HStack(spacing: Ink.s2) {
-                            Button("Place on screen") { NotificationCenter.default.post(name: FloatingPanel.placeRequested, object: nil) }
-                                .controlSize(.small)
-                            Button("Reset") { m.s.pillPosition = .bottomCenter; m.s.pillAnchor = nil }.controlSize(.small)
-                        }
-                    }
-                }
-            }
-            if let until = m.s.pillSnoozedUntil, until > Date().timeIntervalSince1970 {
-                Row(label: "Hidden until \(Date(timeIntervalSince1970: until).formatted(date: .omitted, time: .shortened))",
-                    caption: "Errors still show.", divider: false) {
-                    Button("Show again") { m.s.pillSnoozedUntil = nil }.controlSize(.small)
-                }
-            }
-        }
-        SettingsGroup(title: "While you dictate") {
-            if m.s.provider != .apple {   // the free engine has no live preview (V3); the stored value is kept
-                Row(label: "Live text", caption: "Preview only: the pasted text still comes from the model. Needs a Google AI Studio key. May lag or stop on mixed speech.") {
-                    Toggle("Live text", isOn: $m.s.livePreview).toggleStyle(.app).controlSize(.small).rowControl()
-                }
-            }
-            Row(label: "Show transcript and timing after each dictation") {
-                Toggle("Show transcript and timing", isOn: $m.s.showDetails).toggleStyle(.app).controlSize(.small).rowControl()
-            }
-            Row(label: "Ignore accidental touches", caption: "Taps and silent holds are dropped before anything is sent: no request, no paste.") {
-                Picker("Ignore accidental touches", selection: $m.s.minVoicedMs) {
-                    Text("Relaxed (150 ms of speech)").tag(150.0)
-                    Text("Normal (250 ms of speech)").tag(250.0)
-                    Text("Strict (400 ms of speech)").tag(400.0)
-                }.pickerStyle(.menu).rowControl()
-            }
-            Row(label: "Sounds", caption: "Plays when recording starts, when the text is pasted, and on cancel.") {
-                HStack(spacing: 8) {
-                    Button("Play") { Self.previewSounds(m.s.soundSet, m.s.soundVolume) }
-                        .controlSize(.small).disabled(m.s.soundSet == .off)
-                    Picker("Sounds", selection: $m.s.soundSet) {
-                        ForEach(SoundSet.allCases, id: \.self) { Text($0.label).tag($0) }
-                    }.pickerStyle(.menu).labelsHidden().fixedSize()
-                }
-                .onChange(of: m.s.soundSet) { _, set in Self.previewSounds(set, m.s.soundVolume) }
-                .rowControl()
-            }
-            Row(label: "Sound volume", divider: false) {
-                Slider(value: $m.s.soundVolume, in: 0.1...1) { editing in
-                    if !editing { Sounds.play(.start, set: m.s.soundSet, volume: m.s.soundVolume) }
-                }
-                .frame(width: 160).controlSize(.small).disabled(m.s.soundSet == .off).rowControl()
-            }
-        }
-    }
 }
 
 extension SettingsView {
     /// Start, then done: what a dictation sounds like with this set and volume.
     @MainActor static func previewSounds(_ set: SoundSet, _ volume: Double) {
         Sounds.play(.start, set: set, volume: volume)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-            MainActor.assumeIsolated { Sounds.play(.done, set: set, volume: volume) }
+        Task { @MainActor in
+            if await MainDelay.elapsed(0.45) { Sounds.play(.done, set: set, volume: volume) }
         }
     }
 }
@@ -674,188 +531,6 @@ extension HotkeyChoice {
     /// The key's name in the interface language ("fn", "O‘ng ⌘", "Правый ⌘"), never the English settings label
     /// "fn (🌐)" (HOTKEY-1: other keys are now offered in onboarding, so their names show in UZ/RU text).
     @MainActor var shortLabel: String { AppStrings.current.d.hotkey(self) }
-}
-
-// MARK: Dictation
-
-struct DictationSection: View {
-    @ObservedObject var m: SettingsModel
-
-    var body: some View {
-        if m.s.provider == .apple {
-            // The free engine has one model, one language and no correction pass: those controls are hidden, not reset.
-            SettingsGroup(footer: "Choose the engine on the Languages page. Uzbek and Russian need a cloud key.") {
-                Row(label: "Engine", caption: "English only, no correction pass.", divider: false) {
-                    Text(EngineCopy.freeTitle).font(Ink.Font.body).foregroundStyle(Ink.text2)
-                }
-            }
-        } else {
-            cloudModel
-        }
-        DictionaryEditor(m: m)
-    }
-
-    @ViewBuilder private var cloudModel: some View {
-        // APP-1 (b): the model (and a custom endpoint's URL and model) moved to the Languages page.
-        SettingsGroup(footer: "Mixed Uzbek/Russian speech is most reliable on OpenRouter. The engine and model are on the Languages page.") {
-            Row(label: "Mainly speak", caption: "Auto-detect handles mixed sentences. Pick one language only if Soyla keeps guessing wrong.") {
-                Picker("Mainly speak", selection: Binding(get: { m.s.languageHint ?? "" }, set: { m.s.languageHint = $0.isEmpty ? nil : $0 })) {
-                    ForEach(SettingsView.languages, id: \.1) { Text($0.1).tag($0.0 ?? "") }
-                }.pickerStyle(.menu).rowControl()
-            }
-            Row(label: "Correction pass", caption: "Light removes repeats and fillers and applies self-corrections (about 1.8 s extra). Off pastes the text as heard. The original is always kept in History.", divider: false) {
-                Picker("Correction pass", selection: $m.s.cleanupLevel) {
-                    ForEach(CleanupLevel.allCases, id: \.self) { Text($0.label).tag($0) }
-                }.pickerStyle(.menu).rowControl()
-            }
-        }
-    }
-}
-
-/// Personal dictionary: replacements (heard → write, applied to every pasted text) and plain terms for the model.
-struct DictionaryEditor: View {
-    @ObservedObject var m: SettingsModel
-    /// APP-1 (c): false inside the Dictation page's section (it brings its own title and group).
-    var titled = true
-    private var t: AppStrings { .for(m.s.uiLanguage) }
-
-    var body: some View {
-        if titled { SettingsGroup(title: t.dDict) { rows } } else { rows }
-    }
-
-    @ViewBuilder private var rows: some View {
-        WideRow {
-                Text(t.d.dcIntro)
-                    .font(Ink.Font.caption).foregroundStyle(Ink.text2)
-                ForEach(Array(m.s.dictionary.indices), id: \.self) { i in
-                    HStack(spacing: Ink.s2) {
-                        TextField(t.d.dcHeard, text: field(i, \.from)).well()
-                        Image(systemName: "arrow.right").font(Ink.Font.caption).foregroundStyle(Ink.text2)
-                        TextField(t.d.dcWrite, text: field(i, \.to)).well()
-                        Button { if i < m.s.dictionary.count { m.s.dictionary.remove(at: i) } } label: { Image(systemName: "minus.circle") }
-                            .buttonStyle(.borderless).accessibilityLabel(t.d.dcRemove)
-                    }
-                }
-                HStack {
-                    Button(t.d.dcAdd) { m.s.dictionary.append(DictionaryEntry(from: "", to: "")) }
-                        .controlSize(.small).disabled(m.s.dictionary.count >= ReplacementDictionary.maxEntries)
-                    if m.s.dictionary.count >= ReplacementDictionary.maxEntries {
-                        Text(t.d.dcLimit(ReplacementDictionary.maxEntries)).font(Ink.Font.caption).foregroundStyle(Ink.text2)
-                    }
-                }
-            }
-            WideRow(divider: false) {
-                Text(t.d.dcVocab).font(Ink.Font.caption).foregroundStyle(Ink.text2)
-                TextEditor(text: $m.vocabularyText).font(Ink.Font.mono).frame(height: 70)
-                    .scrollContentBackground(.hidden)
-                    .padding(6)
-                    .background(RoundedRectangle(cornerRadius: Ink.rControl, style: .continuous).fill(Ink.well))
-                    .overlay(RoundedRectangle(cornerRadius: Ink.rControl, style: .continuous).strokeBorder(Ink.hairline))
-            }
-    }
-
-    private func field(_ i: Int, _ kp: WritableKeyPath<DictionaryEntry, String>) -> Binding<String> {
-        Binding(get: { i < m.s.dictionary.count ? m.s.dictionary[i][keyPath: kp] : "" },
-                set: { if i < m.s.dictionary.count { m.s.dictionary[i][keyPath: kp] = $0 } })
-    }
-}
-
-// MARK: Privacy & data
-
-struct PrivacySection: View {
-    @ObservedObject var m: SettingsModel
-    @State private var loginStatus = SMAppService.mainApp.status
-    @State private var loginError: String?
-
-    /// D12 offers Never store / 14 days / Forever; a value saved by an older build stays selectable.
-    private var retentionChoices: [AudioRetention] {
-        var c: [AudioRetention] = [.neverStore, .deleteAfter14Days, .keep]
-        if !c.contains(m.s.retention) { c.insert(m.s.retention, at: 0) }
-        return c
-    }
-
-    var body: some View {
-        SettingsGroup(title: "Recordings") {
-            Row(label: "Keep recordings", caption: "Text stays in History either way. Recordings let you retry a dictation. Failed dictations keep their recording until you retry or remove them, even with Never store.") {
-                Picker("Keep recordings", selection: $m.s.retention) {
-                    ForEach(retentionChoices, id: \.self) { Text($0.label).tag($0) }
-                }.pickerStyle(.menu).rowControl()
-            }
-            Row(label: "Data folder", caption: (SoylaPaths.root.path as NSString).abbreviatingWithTildeInPath, divider: false) {
-                Button("Reveal in Finder") {
-                    SoylaPaths.ensureDirectories()
-                    NSWorkspace.shared.activateFileViewerSelecting([SoylaPaths.recordings])
-                }.controlSize(.small)
-            }
-        }
-        SettingsGroup(title: "Microphone") {
-            Row(label: "Keep the microphone on", caption: micCaption) {
-                Picker("Keep the microphone on", selection: $m.s.micWarmMode) {
-                    ForEach(MicWarmMode.allCases, id: \.self) { Text($0.label).tag($0) }
-                }.pickerStyle(.menu).rowControl()
-            }
-            Row(label: "Prefer the built-in microphone when a headset is connected",
-                caption: "Active input: \(AudioDevices.activeInputName(preferBuiltIn: m.s.preferBuiltInMic))", divider: false) {
-                Toggle("Prefer the built-in microphone", isOn: $m.s.preferBuiltInMic).toggleStyle(.app).controlSize(.small).rowControl()
-            }
-        }
-        SettingsGroup(title: "Startup", footer: loginError ?? (loginStatus == .requiresApproval ? "Enabled in System Settings → General → Login Items (approval needed)." : nil)) {
-            Row(label: "Launch Soyla at login", divider: false) {
-                Toggle("Launch Soyla at login", isOn: Binding(
-                    get: { loginStatus == .enabled || loginStatus == .requiresApproval },
-                    set: { on in
-                        do { if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }; loginError = nil }
-                        catch { loginError = "Couldn't change the login item: \(error.localizedDescription)" }
-                        loginStatus = SMAppService.mainApp.status
-                    })).toggleStyle(.app).controlSize(.small).rowControl()
-            }
-        }
-        .onAppear { loginStatus = SMAppService.mainApp.status }
-    }
-
-    private var micCaption: String {
-        var t = "Off (default): the mic is on only while you hold the hotkey; capture starts about 0.3 s after you press, with a tick when it's live. On for 30 s or Always: instant capture, but the macOS mic indicator stays on. The mic always closes when the screen locks or the Mac sleeps."
-        if m.s.micWarmMode != .off {
-            t += " While the mic is on, the last 0.3 s before you press the hotkey is kept in memory so a word you began early isn't cut. It is discarded continuously and never saved or sent unless you press the hotkey."
-        }
-        return t
-    }
-}
-
-// MARK: About
-
-struct AboutSection: View {
-    @ObservedObject var m: SettingsModel
-    var onSetupAssistant: (() -> Void)?
-
-    var body: some View {
-        SettingsGroup(footer: "Checking only asks GitHub for the latest version number; nothing else is sent. An update is installed only if it is signed like the Soyla you have.") {
-            Row(label: "Version") { Text(Soyla.version).font(Ink.Font.body).foregroundStyle(Ink.text2).monospacedDigit() }
-            Row(label: "Updates", caption: "Check daily") {
-                HStack(spacing: Ink.s3) {
-                    Toggle("Check daily", isOn: $m.s.autoUpdateCheck).toggleStyle(.app).controlSize(.small).rowControl()
-                    Button("Check now") {
-                        Task { @MainActor in
-                            if await UpdateCheck.run(silent: false, onAvailable: { Updater.shared.offer($0) }) { m.s.lastUpdateCheck = Date() }
-                        }
-                    }.controlSize(.small)
-                }
-            }
-            Row(label: "Install updates automatically",
-                caption: "Soyla installs a new version when you're not dictating and restarts by itself. macOS then asks once for your Mac password.") {
-                Toggle("Install updates automatically", isOn: $m.s.autoInstallUpdates)
-                    .toggleStyle(.app).controlSize(.small).rowControl()
-            }
-            Row(label: "Source code", divider: onSetupAssistant != nil) {
-                Link("Soyla on GitHub", destination: URL(string: "https://github.com/ShamsiddinKomil/soyla")!).font(Ink.Font.body)
-            }
-            if let onSetupAssistant {
-                Row(label: "Setup Assistant", caption: "Microphone, permissions, hotkey check, key, first dictation.", divider: false) {
-                    Button("Open…", action: onSetupAssistant).controlSize(.small)
-                }
-            }
-        }
-    }
 }
 
 // MARK: Developer
@@ -885,8 +560,8 @@ struct DeveloperSection: View {
                     caption: "Sends the recording in pieces at your pauses while fn is held, so long dictations paste sooner. Same model and audio as normal.") {
                     Toggle("Transcribe while speaking", isOn: $m.s.streamSegments).toggleStyle(.app).controlSize(.small).rowControl()
                 }
-                Row(label: "Instant results with Live (experimental)",
-                    caption: "Uses Google Live's text when it is safe: your language setting is one language, or Auto locked onto one. Mixed speech still waits for the pieces. Needs a Google AI Studio key.") {
+                Row(label: "Instant results with Live",
+                    caption: "On by default when Google AI Studio is your engine: uses Google Live's text when it is safe (one language, or Auto locked onto one), about 0.5 s instead of 2 s. Mixed speech still waits for the pieces.") {
                     Toggle("Instant results with Live", isOn: $m.s.liveFastPath).toggleStyle(.app).controlSize(.small).rowControl()
                 }
                 Row(label: "Pre-warm connection on key down") {
@@ -995,9 +670,9 @@ struct LastRequestView: View {
             if let r = run {
                 Text("\(r.ts) · \(r.model) · \(r.status.rawValue) · \(r.audio.format), \(String(format: "%.1f s", r.audio.durationSec))")
                     .font(Ink.Font.mono).textSelection(.enabled)
-                if let e = r.error { Text(e).font(Ink.Font.caption).foregroundStyle(Ink.signal).lineLimit(3) }
+                if let e = r.error { Text(Self.displayError(e)).font(Ink.Font.caption).foregroundStyle(Ink.signal).lineLimit(3) }
                 if let note = EngineCopy.lastRequestNote(model: r.model) { Text(note).font(Ink.Font.body).foregroundStyle(Ink.text2) }
-                block("provider", (r.providerMeta ?? [:]).map { ($0.key, $0.value) })
+                block("provider", (r.providerMeta ?? [:]).map { ($0.key, Self.displayValue(key: $0.key, value: $0.value)) })
                 block("timeline (ms)", r.timelineMs.map { ($0.key, String(format: "%.0f", $0.value)) })
             } else {
                 Text("No dictations yet.").font(Ink.Font.caption).foregroundStyle(Ink.text2)
@@ -1020,6 +695,16 @@ struct LastRequestView: View {
     }
 
     private func load() { run = ((try? RunLog.readAll()) ?? []).last }
+
+    /// Dictated text (`live_text`, `transcript`, `cleanup_rejected`, any `*_text`) shows as its length only, so a
+    /// screenshot of this panel never carries what was said (owner D8, 2026-10-25). `*_ms` timings stay numbers.
+    nonisolated static func displayValue(key: String, value: String) -> String {
+        let isText = key == "transcript" || key == "cleanup_rejected" || key.hasSuffix("_text")
+        return isText ? "\(value.count) characters" : value
+    }
+
+    /// The error without a provider's response body, which may hold a transcript (same rule as app.log).
+    nonisolated static func displayError(_ error: String) -> String { DictationPipeline.logSafe(error) }
 }
 
 /// Settings → Pill: a small picture of the screen (menu bar on top, Dock below) with six spots to click.

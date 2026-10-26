@@ -190,11 +190,11 @@ import Foundation
     @Test func everyLanguageHasThePanelWords() {
         for l in UILanguage.allCases {
             let t = AppStrings.for(l)
-            for s in [t.cxChecking, t.cxFail, t.cxCancel, t.cxBoth, t.cxPriv("OpenRouter")] {
+            for s in [t.cxFail, t.cxCancel, t.cxBoth, t.cxPriv("OpenRouter")] {
                 #expect(!s.trimmingCharacters(in: .whitespaces).isEmpty, "\(l)")
                 #expect(!s.lowercased().contains("kalit") && !s.contains("Bulut"), "\(l): \(s)")
             }
         }
-        #expect(AppStrings.en.cxChecking == "Checking…" && AppStrings.ru.cxChecking == "Проверяю…" && AppStrings.uz.cxCancel == "Bekor qilish")
+        #expect(AppStrings.uz.cxCancel == "Bekor qilish")
     }
 }

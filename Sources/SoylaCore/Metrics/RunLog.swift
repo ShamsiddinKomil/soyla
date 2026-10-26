@@ -24,7 +24,7 @@ public enum RunLog {
     /// Posted on the main queue after every append/update (History reloads on it).
     public static let didChange = Notification.Name("ai.soyla.runLogDidChange")
     private static func notifyChanged() {
-        DispatchQueue.main.async { NotificationCenter.default.post(name: didChange, object: nil) }
+        Task { @MainActor in NotificationCenter.default.post(name: didChange, object: nil) }
     }
 
     /// In-process guard: `update` rewrites the file, so an `append` must not land on the old inode mid-rewrite.

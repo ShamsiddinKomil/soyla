@@ -6,11 +6,15 @@ body:
     attributes:
       value: |
         Paste problems are the most common issue in dictation apps, so the fields below matter.
-        Please do not paste API keys, and avoid pasting private dictated text.
+        Please avoid pasting private dictated text.
+
+        **Never post your API key**, here or anywhere. Soyla and its maintainer will never ask for it; anyone who does is not us.
+        The only official download is this repository's [Releases](https://github.com/ShamsiddinKomil/soyla/releases) page; check the zip with its `.sha256` file and the signing-certificate fingerprint in the release notes ([how](https://github.com/ShamsiddinKomil/soyla/blob/main/docs/INSTALL.md#1-download-and-install)).
   - type: input
     id: version
     attributes:
       label: Soyla version
+      description: Settings → About. **Report a Problem…** in the menu bar icon fills in this, macOS, hotkey, keyboard layout and microphone for you.
       placeholder: "0.2.0"
     validations:
       required: true
@@ -51,8 +55,10 @@ body:
   - type: dropdown
     id: provider
     attributes:
-      label: Provider
+      label: Engine / provider
+      description: Settings → Languages shows where each language runs.
       options:
+        - On this Mac (free, English only)
         - OpenRouter
         - Google AI Studio (direct)
         - OpenAI-compatible endpoint

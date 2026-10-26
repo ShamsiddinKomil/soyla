@@ -23,8 +23,8 @@ One hue (blue) across every surface, shifting only in lightness; colour appears 
 1. **Speech is a note, not a label.** Every sentence the user said (Last dictation, History, the sample
    sentence) sits on its own card (`NoteCard`): a meta line (when · app · length), then the text in the system face
    at 15 pt with open leading, selectable. The card keeps what you said apart from the controls around it.
-2. **The key is a key.** `KeyCap` draws a real key with a bottom edge; the big one on Home sinks and turns
-   lapis while the hotkey is held. Same cap in the Hotkey page and the Setup Assistant.
+2. **The key is a key.** `FnKeyCap` draws the real Apple key (globe, "fn", 4 pt of travel); the large one on Home
+   sinks while the hotkey is held. Same cap in the Hotkey page and the Setup Assistant; `KeyChip` names a key inline.
 3. **One mark everywhere.** The brand is the pill: a capsule with five bars in the silhouette of a spoken word
    (heights 0.42 · 0.82 · 0.58 · 1.0 · 0.5, asymmetric on purpose: a voice, not an equaliser). It is drawn from
    one geometry (`Brand` in DesignKit.swift, mirrored in `scripts/make_icon.swift`) as the app icon (white
@@ -65,7 +65,8 @@ groups 24, page margins 32, sidebar width 200.
 
 ### Type
 
-San Francisco for the interface, New York for spoken text, SF Rounded only for numbers and key caps.
+San Francisco for the interface and for spoken text (no serif: New York read poorly in mixed Latin/Cyrillic,
+2026-10-16), SF Rounded only for numbers and key caps.
 
 | Role | Size / weight | Where |
 |---|---|---|
@@ -82,15 +83,14 @@ Hierarchy comes from weight and the four ink steps, not from size.
 
 ## Components
 
-- `KeyCap(text, size: .small | .hero, pressed:)`
+- `FnKeyCap(label, size: .medium | .large)`, `KeyChip(label)`
+- `PillChip(text, label)` the tiny language-set label in caption type on the black pill while recording ("RU", "UZ·EN"); hidden for the default set
 - `Mark(level:mode:)` the waveform as a static or live mark
 - `StatusLine(colour, text)` dot + word
 - `SpokenText(text)` system 15, selectable
-- `NoteCard(meta:status:text:actions:)` one dictation as a saved note (Home, History)
-- `PageHeader(title, purpose)`
+- `NoteCard(meta:status:text:actions:)` one dictation as a saved note (Home, History). Optional `badge` (a small `lazurWash` tag after the meta line, "Cleaned"), `styled` (the text with a word diff: removed words struck through in `text3`, added or changed words on `lazurWash`) and `note` (a quiet caption line under the text)
 - `SettingsGroup(title?) { Row(...) }` sheet surface, hairline rows; `Row(label, caption?) { control }`
 - `Callout(kind: .warn | .info, text, action)` the only coloured box, for "needs an API key" and warnings
-- `Stat(value, label)` big number, caption under it
 - `Hairline()`
 
 ## Copy
@@ -190,12 +190,13 @@ Setup's world continued, so Done hands over to Home without a seam. Spec: the ap
 - **Pane.** `paper`, padding 56 top · 72 sides · 24 bottom, the globe menu (interface language, live) top-right.
 - **Type** (`Ink.Font.app*`, the SetupScale sizes): title 31/600, subtitle 15.5, section 15.5/600, row label
   15.5/500, caption and status 14, try field and last dictation 16.5, sidebar 14, footer 13. Rows 60 (`Ink.appRow`).
-- **Home.** Title + one line from `HomeState`; the hero is `FnKeyCap` large (the same view as Done) beside a 72 pt
-  try field and the hints "fn ×2 · Hands-free · esc Cancel" (`KeyChip`); with the mic or Accessibility off a
+- **Home.** Title + one line from `HomeState`; the hero is `FnKeyCap` medium (D23: so the everyday Home fits 1056 × 688;
+  Done keeps the large one) beside a 72 pt try field and the hints "fn ×2 · Hands-free · esc Cancel" (`KeyChip`); with the mic or Accessibility off a
   Permissions group replaces it. "Your languages": Change… plus the one fix (Connect… / Use Cloud), status only on the
   rows. "Last dictation": today's count and usual wait, All in History, a note card capped at two lines. It renders
-  unscrolled whenever it fits (`ViewThatFits`), a scroll view only below the window height. The Keychain notice shows only while a
-  cloud key is in use and macOS holds it.
+  unscrolled whenever it fits (`ViewThatFits`), a scroll view only below the window height. Section gaps 24 · 18 · 16
+  (hero, Your languages, Last dictation). The key notice (one-time Keychain move, or an unreadable key file) shows only while a
+  cloud key is in use and the launch key read is not ready.
 - **Re-entry.** Every Connect…, Change… and Allow… opens the setup window at that step (`SetupFlow(entry:)`): no
   Welcome, no Back, a rail step ticked only when it really happened (permissions granted, a practice made; the rest
   show skipped), every primary says Done (Connect's skip is Cancel). Done returns to the page it came from. Whether

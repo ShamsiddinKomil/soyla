@@ -349,7 +349,8 @@ private struct TryStage: View {
 
     @ViewBuilder private func note(_ t: SetupStrings) -> some View {
         switch model.tryNote {
-        case .idle: Text(t.tNote).foregroundStyle(Ink.onLapis2)
+        // D24 / R-16: the pane's subtitle already says "Hold fn, read this, let go"; the idle stage adds nothing.
+        case .idle: Text(verbatim: "").accessibilityHidden(true)
         case .short: Text(t.tShort).foregroundStyle(Ink.onLapis2)
         case .listening:
             HStack(spacing: 6) { Circle().fill(Ink.signal).frame(width: 7, height: 7); Text(t.tListen) }.foregroundStyle(Ink.onLapis)

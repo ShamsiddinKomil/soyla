@@ -127,11 +127,11 @@ public final class GoogleAIProvider: TranscriptionProvider, Sendable {
 
     /// generateContent body (exposed for tests). Prompt identical to the OpenRouter chat route.
     static func makeBody(_ audio: EncodedAudio, options: TranscribeOptions) throws -> Data {
-        var gen: [String: Any] = ["temperature": 0]
+        var gen: [String: Any] = ["temperature": 0, "maxOutputTokens": TextGuards.sttMaxTokens(durationSec: audio.durationSec) * max(1, options.maxTokensScale)]
         if let t = GoogleAIHTTP.thinkingConfig(for: options.model) { gen["thinkingConfig"] = t }
         let body: [String: Any] = [
             "contents": [["role": "user", "parts": [
-                ["text": OpenRouterSTTProvider.transcriptionPrompt(options)],
+                ["text": OpenRouterSTTProvider.transcriptionPrompt(options, durationSec: audio.durationSec)],
                 ["inlineData": ["mimeType": GoogleAIHTTP.mimeType(for: audio.format), "data": audio.data.base64EncodedString()]],
             ]]],
             "generationConfig": gen,
@@ -139,10 +139,15 @@ public final class GoogleAIProvider: TranscriptionProvider, Sendable {
         return try JSONSerialization.data(withJSONObject: body, options: [.withoutEscapingSlashes])
     }
 
+    /// The generateContent request; its timeout scales with the clip (`TextGuards.sttTimeoutSec`).
+    static func makeRequest(_ audio: EncodedAudio, options: TranscribeOptions, apiKey: String) throws -> URLRequest {
+        GoogleAIHTTP.request(url: GoogleAIHTTP.url(model: options.model), method: "POST", apiKey: apiKey,
+                             body: try makeBody(audio, options: options),
+                             timeout: TextGuards.sttTimeoutSec(durationSec: audio.durationSec, cap: options.timeoutSec))
+    }
+
     public func transcribe(_ audio: EncodedAudio, options: TranscribeOptions, timeline: RunTimeline) async throws -> TranscriptResult {
-        let body = try Self.makeBody(audio, options: options)
-        let req = GoogleAIHTTP.request(url: GoogleAIHTTP.url(model: options.model), method: "POST", apiKey: apiKey,
-                                       body: body, timeout: options.timeoutSec)
+        let req = try Self.makeRequest(audio, options: options, apiKey: apiKey)
         let collector = MetricsCollector()
         timeline.mark(.requestSent)
         let data: Data
@@ -159,7 +164,7 @@ public final class GoogleAIProvider: TranscriptionProvider, Sendable {
         guard let http = resp as? HTTPURLResponse else { throw SoylaError.decode("non-HTTP response") }
         guard http.statusCode == 200 else { throw GoogleAIHTTP.httpError(status: http.statusCode, data: data, apiKey: apiKey) }
         let (text, usage, finish) = try GoogleAIHTTP.decode(data)
-        if text.isEmpty { throw SoylaError.emptyTranscript }
+        if ScriptCheck.emptyIsNoSpeech(text, finishReason: finish) { throw SoylaError.emptyTranscript }
         var meta: [String: String] = ["http_status": "\(http.statusCode)", "provider": "google-ai-studio"]
         if let finish { meta["finish_reason"] = finish }
         return TranscriptResult(text: text, language: options.languageHint, usage: usage, providerMeta: meta)

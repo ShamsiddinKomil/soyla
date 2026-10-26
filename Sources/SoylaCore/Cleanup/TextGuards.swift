@@ -17,16 +17,27 @@ public enum CleanupGuard: String, Sendable, Equatable, CaseIterable {
 
 /// A script problem in a transcript (Korean for Uzbek, Uzbek in Cyrillic…).
 public enum ScriptIssue: Sendable, Equatable {
-    /// Hangul / CJK / kana / Arabic / Thai letters in a uz/ru/en session. Associated value: script name.
+    /// A letter outside Latin, Latin-1 and Cyrillic in a uz/ru/en session. Associated value: script name
+    /// (hangul, kana, cjk, arabic, thai, greek, armenian, georgian, hebrew, cherokee, other).
     case foreignScript(String)
     /// Uzbek words written in Cyrillic (Uzbek must be Latin).
     case uzbekCyrillic
+    /// D26(b): a script none of the speaker's languages uses (today: Cyrillic without Russian in the set).
+    case outsideSet(String)
+    /// Three or more words with Latin-extended letters (ż ł ť ğ ş ı) in a uz/ru/en session: a transliteration.
+    case latinExtended
+    /// Not a script problem: the reply ran away (`TextGuards.ranAway`) or was cut off by the output cap, and the one
+    /// resend did too (`ScriptCheck.notRunaway`). Same card; in pieces mode the whole clip is sent instead.
+    case runaway
 
     /// Short tag for `provider_meta`.
     public var tag: String {
         switch self {
         case .foreignScript(let s): return "foreign:" + s
         case .uzbekCyrillic: return "uzbek_cyrillic"
+        case .outsideSet(let s): return "outside_set:" + s
+        case .latinExtended: return "latin_ext"
+        case .runaway: return "runaway"
         }
     }
 }
@@ -166,47 +177,38 @@ public enum TextGuards {
         return false
     }
 
-    /// Letter counts per script family.
+    /// Letter counts per script family. `latinExt` letters are also counted in `latin`.
     public struct ScriptProfile: Equatable, Sendable {
-        public var latin = 0, cyrillic = 0, foreign = 0
+        public var latin = 0, cyrillic = 0, foreign = 0, latinExt = 0
         public var foreignName: String? = nil
         public var letters: Int { latin + cyrillic + foreign }
         public var cyrillicShare: Double { letters == 0 ? 0 : Double(cyrillic) / Double(letters) }
     }
 
-    static func scriptName(_ v: UInt32) -> String? {
-        switch v {
-        case 0x1100...0x11FF, 0x3130...0x318F, 0xA960...0xA97F, 0xAC00...0xD7AF, 0xD7B0...0xD7FF: return "hangul"
-        case 0x3040...0x30FF, 0x31F0...0x31FF: return "kana"
-        case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xF900...0xFAFF, 0x20000...0x2FA1F: return "cjk"
-        case 0x0600...0x06FF, 0x0750...0x077F, 0x08A0...0x08FF, 0xFB50...0xFDFF, 0xFE70...0xFEFF: return "arabic"
-        case 0x0E00...0x0E7F: return "thai"
-        default: return nil
-        }
-    }
-
     public static func scriptProfile(_ s: String) -> ScriptProfile {
         var p = ScriptProfile()
         for u in s.unicodeScalars {
-            let v = u.value
-            if let name = scriptName(v) {
+            switch letterClass(u) {
+            case .latin?: p.latin += 1
+            case .latinExt?: p.latin += 1; p.latinExt += 1
+            case .cyrillic?: p.cyrillic += 1
+            case .foreign(let name)?:
                 p.foreign += 1
                 if p.foreignName == nil { p.foreignName = name }
-            } else if u.properties.isAlphabetic {
-                if (0x0400...0x052F).contains(v) { p.cyrillic += 1 }
-                else if v < 0x0250 || (0x1E00...0x1EFF).contains(v) { p.latin += 1 }
+            case nil: break
             }
         }
         return p
     }
 
-    /// Drops every word that contains a foreign-script letter (Hangul, CJK, Arabic, Thai…). Returns nil when that
+    /// Drops every word that contains a foreign-script letter (Hangul, CJK, Arabic, Greek…). Returns nil when that
     /// would be more than `maxShare` of the letters or leave under 20 letters: then it was not a stray, it was wrong.
     public static func stripForeignWords(_ text: String, maxShare: Double = 0.05) -> String? {
         let p = scriptProfile(text)
         guard p.foreign > 0, Double(p.foreign) <= Double(p.letters) * maxShare, p.latin + p.cyrillic >= 20 else { return nil }
-        let kept = text.split(separator: " ", omittingEmptySubsequences: true)
-            .filter { w in !w.unicodeScalars.contains { scriptName($0.value) != nil } }
+        let kept = text.split(separator: " ", omittingEmptySubsequences: true).filter { w in
+            !w.unicodeScalars.contains { if case .foreign? = letterClass($0) { return true }; return false }
+        }
         return kept.joined(separator: " ")
     }
 
@@ -226,16 +228,25 @@ public enum TextGuards {
         return ["uz", "ru", "en"].contains(where: { l.hasPrefix($0) })
     }
 
+    /// D26(b): Cyrillic counts as "outside the set" only above this share of the letters, so one look-alike letter
+    /// ("о" for "o") never costs a retry. Same 10 % that LiveFast treats as "still Latin" (`share <= 0.10`).
+    public static let outsideSetCyrillicShare = 0.10
+
     /// Script check after STT and after cleanup. `uzbekLatin`: the session's Uzbek is Latin (always, today).
-    public static func scriptIssue(_ text: String, languageHint: String? = nil, uzbekLatin: Bool = true) -> ScriptIssue? {
-        if isUzRuEnSession(languageHint) {
-            let p = scriptProfile(text)
-            if p.foreign > 0 { return .foreignScript(p.foreignName ?? "other") }
+    /// `languages` (D26b): the speaker's set; Cyrillic is allowed only when `ru` is in it, Latin always. Empty = no set.
+    public static func scriptIssue(_ text: String, languageHint: String? = nil, languages: [String] = [],
+                                   uzbekLatin: Bool = true) -> ScriptIssue? {
+        let p = scriptProfile(text)
+        if isUzRuEnSession(languageHint), p.foreign > 0 { return .foreignScript(p.foreignName ?? "other") }
+        if !languages.isEmpty, !languages.contains(where: { $0.lowercased() == "ru" }), p.cyrillicShare > outsideSetCyrillicShare {
+            return .outsideSet("cyrillic")
         }
-        guard uzbekLatin else { return nil }
-        if text.contains(where: { uzbekCyrillicLetters.contains($0) }) { return .uzbekCyrillic }
-        let hits = words(text).filter { uzbekCyrillicWords.contains($0) }.count
-        return hits >= 2 ? .uzbekCyrillic : nil
+        if uzbekLatin {
+            if text.contains(where: { uzbekCyrillicLetters.contains($0) }) { return .uzbekCyrillic }
+            if words(text).filter({ uzbekCyrillicWords.contains($0) }).count >= 2 { return .uzbekCyrillic }
+        }
+        if isUzRuEnSession(languageHint), latinExtWords(text) >= latinExtWordLimit { return .latinExtended }
+        return nil
     }
 
     /// Cleanup moved the Latin/Cyrillic balance by more than 20 points (needs ≥ 10 letters on both sides):
@@ -261,11 +272,48 @@ public enum TextGuards {
     private static let timestampPattern = try? NSRegularExpression(
         pattern: #"[\[(]?\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b[\])]?[ \t]*[-–—:]?[ \t]*"#)
 
+    /// A zero-padded `0m:ss` glued to a letter or to more digits: "uchra 00:04shuv", "Salom00:03", "00:023:00"
+    /// (2026-10-26 replays). Group 1 = the `0m:ss` part. A dictated time is not zero-padded ("5:30da", "14:30da")
+    /// or lies past the end of the clip ("07:30da"), so it stays.
+    private static let gluedTimestampPattern = try? NSRegularExpression(
+        pattern: #"(?<![\d:])(0\d:[0-5]\d)(?:(?=\d)[\d:]*|(?::[0-5]\d)?(?=\p{L}))|(?<=\p{L})(0\d:[0-5]\d)(?::[0-5]\d)?(?![\d:])"#)
+
+    /// Removes glued timestamps that fall inside the audio. One between two letters ("uchra00:04shuv") goes with no
+    /// space, so the word joins again ("uchrashuv"); any other becomes a space.
+    static func stripGluedTimestamps(_ text: String, durationSec: Double) -> (text: String, removed: Int) {
+        guard let gluedTimestampPattern else { return (text, 0) }
+        let ns = text as NSString, limit = Int(durationSec.rounded(.up)) + 5
+        var out = text, removed = 0
+        for m in gluedTimestampPattern.matches(in: text, range: NSRange(location: 0, length: ns.length)).reversed() {
+            let r = m.range(at: 1).location == NSNotFound ? m.range(at: 2) : m.range(at: 1)
+            let parts = ns.substring(with: r).split(separator: ":").compactMap { Int($0) }
+            guard parts.count == 2, parts[0] * 60 + parts[1] <= limit, let whole = Range(m.range, in: out) else { continue }
+            let between = whole.lowerBound > out.startIndex && whole.upperBound < out.endIndex
+                && out[out.index(before: whole.lowerBound)].isLetter && out[whole.upperBound].isLetter
+            out.replaceSubrange(whole, with: between ? "" : " "); removed += 1
+        }
+        return (out, removed)
+    }
+
     /// Gemini sometimes subtitles long clips ("00:01 salom 00:07 …", 2026-10-16: 26 in one 45 s run).
     /// Removes them only when they look like audio positions, so a dictated "14:30" stays:
     /// two or more, in order, none past the end of the audio; or a single one at the very start.
-    /// Returns the cleaned text and how many were removed (0 = text unchanged).
+    /// Glued ones (`gluedTimestampPattern`) go first, on their own. Returns the cleaned text and how many were
+    /// removed (0 = text unchanged).
     public static func stripTimestamps(_ text: String, durationSec: Double) -> (text: String, removed: Int) {
+        let glued = stripGluedTimestamps(text, durationSec: durationSec)
+        let track = stripTimestampTrack(glued.text, durationSec: durationSec)
+        guard glued.removed > 0 else { return track }
+        return (tidy(track.text), glued.removed + track.removed)
+    }
+
+    private static func tidy(_ s: String) -> String {
+        var out = s.replacingOccurrences(of: #"[ \t]{2,}"#, with: " ", options: .regularExpression)
+        out = out.replacingOccurrences(of: #" +([,.!?;])"#, with: "$1", options: .regularExpression)
+        return out.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func stripTimestampTrack(_ text: String, durationSec: Double) -> (text: String, removed: Int) {
         guard let timestampPattern else { return (text, 0) }
         let ns = text as NSString
         let matches = timestampPattern.matches(in: text, range: NSRange(location: 0, length: ns.length))
@@ -285,11 +333,9 @@ public enum TextGuards {
         let leadingOnly = matches.count == 1
             && ns.substring(to: matches[0].range.location).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard inAudio, (matches.count >= 2 && ordered) || leadingOnly else { return (text, 0) }
-        var out = timestampPattern.stringByReplacingMatches(in: text, range: NSRange(location: 0, length: ns.length),
+        let out = timestampPattern.stringByReplacingMatches(in: text, range: NSRange(location: 0, length: ns.length),
                                                             withTemplate: " ")
-        out = out.replacingOccurrences(of: #"[ \t]{2,}"#, with: " ", options: .regularExpression)
-        out = out.replacingOccurrences(of: #" +([,.!?;])"#, with: "$1", options: .regularExpression)
-        return (out.trimmingCharacters(in: .whitespacesAndNewlines), matches.count)
+        return (tidy(out), matches.count)
     }
 
     // MARK: request sizing
@@ -301,5 +347,81 @@ public enum TextGuards {
     /// Floor 64, cap 4096. A response that hits it comes back with finish_reason "length" → guard → raw.
     public static func maxTokens(for input: String, reasoningHeadroom: Int = 0) -> Int {
         min(4096, max(64, Int((Double(estimateTokens(input)) * 1.5).rounded(.up))) + reasoningHeadroom)
+    }
+
+    /// Speech-to-text output cap: 256 (minimal thinking + a short answer) + 24 a second, about twice a fast talker's
+    /// 4 words a second in Cyrillic tokens. Cap 8192. Perf test 2026-10-26: uncapped, Flash sometimes answered a 2 s clip
+    /// with 88–756 words and took 3–28 s.
+    public static func sttMaxTokens(durationSec: Double) -> Int {
+        min(8192, 256 + Int((max(0, durationSec) * 24).rounded(.up)))
+    }
+
+    /// Speech-to-text request timeout: 15 s up to a 20 s clip, then 0.75 s more per second of audio, never over `cap`
+    /// (`TranscribeOptions.timeoutSec`, 60). Perf test 2026-10-26: a stalled request on a 5.9 s clip waited 60.4 s.
+    /// The owner's slowest real answer was 8 s (a clip under 10 s); a 60 s clip gets 45 s.
+    public static func sttTimeoutSec(durationSec: Double, cap: Double) -> Double {
+        min(cap, 15 + 0.75 * max(0, durationSec - 20))
+    }
+
+    /// A transcript far longer than anyone speaks (20 + 8 words a second): a loop or invented text, not the clip.
+    public static func ranAway(_ text: String, durationSec: Double) -> Bool {
+        Double(words(text).count) > 20 + 8 * max(0, durationSec)
+    }
+}
+
+// MARK: - script allowlist (2026-10-26)
+
+extension TextGuards {
+    /// The scripts the first script check named. Any character in these blocks counts, letter or not.
+    static func scriptName(_ v: UInt32) -> String? {
+        switch v {
+        case 0x1100...0x11FF, 0x3130...0x318F, 0xA960...0xA97F, 0xAC00...0xD7AF, 0xD7B0...0xD7FF: return "hangul"
+        case 0x3040...0x30FF, 0x31F0...0x31FF: return "kana"
+        case 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xF900...0xFAFF, 0x20000...0x2FA1F: return "cjk"
+        case 0x0600...0x06FF, 0x0750...0x077F, 0x08A0...0x08FF, 0xFB50...0xFDFF, 0xFE70...0xFEFF: return "arabic"
+        case 0x0E00...0x0E7F: return "thai"
+        default: return nil
+        }
+    }
+
+    /// Names for letters the allowlist catches (2026-10-26 pieces replays: "руководи Ᏻтелей", "ϓ"). Anything else is "other".
+    static func otherScriptName(_ v: UInt32) -> String {
+        switch v {
+        case 0x0370...0x03FF, 0x1F00...0x1FFF: return "greek"
+        case 0x0530...0x058F: return "armenian"
+        case 0x0590...0x05FF, 0xFB1D...0xFB4F: return "hebrew"
+        case 0x10A0...0x10FF, 0x2D00...0x2D2F, 0x1C90...0x1CBF: return "georgian"
+        case 0x13A0...0x13FF, 0xAB70...0xABBF: return "cherokee"
+        default: return "other"
+        }
+    }
+
+    enum LetterClass: Equatable { case latin, latinExt, cyrillic, foreign(String) }
+
+    /// Allowlist (2026-10-26): Basic Latin and Latin-1 letters (é ü ö ç ñ in names), Cyrillic (Uzbek Cyrillic has its
+    /// own rule), and Latin-extended letters (see `latinExtWordLimit`). nil = not a counted letter: digits,
+    /// punctuation, symbols, emoji, the apostrophe and modifier marks (ʻ ʼ), combining accents, letter-like symbols
+    /// (№ ™ Ⅳ ①). Every other letter is foreign.
+    static func letterClass(_ u: Unicode.Scalar) -> LetterClass? {
+        let v = u.value
+        if let name = scriptName(v) { return .foreign(name) }
+        guard u.properties.isAlphabetic else { return nil }
+        switch v {
+        case 0...0xFF: return .latin
+        case 0x02B0...0x036F, 0x2100...0x218F, 0x2460...0x24FF, 0x1F100...0x1F1FF: return nil
+        case 0x0100...0x02AF, 0x1D00...0x1DBF, 0x1E00...0x1EFF, 0x2C60...0x2C7F, 0xA720...0xA7FF, 0xAB30...0xAB6F: return .latinExt
+        case 0x0400...0x052F, 0x1C80...0x1C8F, 0x2DE0...0x2DFF, 0xA640...0xA69F: return .cyrillic
+        default: return .foreign(otherScriptName(v))
+        }
+    }
+
+    /// Uzbek Latin uses no Latin-extended letter, but Turkish and Polish names do ("Doğan", "Łukasz"), so one or
+    /// two such words pass. A transliterated sentence has many ("Nużno także obnowiť…", 2026-10-26 pieces replay).
+    /// The owner's 113 real runs: 0 words with any. Three words or more → `ScriptIssue.latinExtended`.
+    public static let latinExtWordLimit = 3
+
+    /// Words (split on whitespace) that contain a Latin-extended letter.
+    public static func latinExtWords(_ s: String) -> Int {
+        s.split(whereSeparator: \.isWhitespace).filter { w in w.unicodeScalars.contains { letterClass($0) == .latinExt } }.count
     }
 }

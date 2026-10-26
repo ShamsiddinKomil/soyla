@@ -11,7 +11,7 @@ final class AppStatus: ObservableObject {
     @Published private(set) var permissions = PermissionState()
     /// Per provider: masked key + whether it matches the last successful Test. Missing providers are absent.
     @Published var keys: [KeyProvider: KeyState] = [:]
-    /// Waiting on (or refused by) the macOS Keychain password dialog. While not `.ready`, a missing key is not missing.
+    /// The launch key read: the one-time Keychain move (dialog) or a broken key file. While not `.ready`, a missing key is not missing.
     @Published var keychain: Secrets.KeychainAccess = .ready
     @Published var lastRun: RunRecord? = nil
     @Published var today = TodayStats()
@@ -61,15 +61,6 @@ final class AppStatus: ObservableObject {
     /// `start()` (MainView) never starts the poller that would replace it with this Mac's real grants.
     func previewPermissions(_ p: PermissionState) { permissions = p; frozen = true }
     private(set) var frozen = false
-
-    /// A hotkey event arrived (onboarding 2c): Input Monitoring works even if the status call says otherwise.
-    func noteEventDelivered() {
-        guard !permissions.eventsFlowing else { return }
-        permissions.eventsFlowing = true
-    }
-
-    /// After `tccutil reset`: forget the old proof of delivery.
-    func resetEventsFlowing() { permissions.eventsFlowing = false; refreshPermissions() }
 
     func refresh() {
         refreshPermissions()
@@ -363,49 +354,6 @@ struct TodayStats: Equatable {
     var waitText: String { medianWaitMs.map { String(format: "%.1f s", $0 / 1000) } ?? "–" }
 }
 
-/// Shown on Settings → Engine while macOS holds the saved key behind its password dialog (Home uses AppStrings).
-/// Soyla has no paid Apple certificate, so macOS asks once after every update (docs/TROUBLESHOOTING.md).
-struct KeychainNotice: View {
-    let access: Secrets.KeychainAccess
-    static func text(_ a: Secrets.KeychainAccess) -> String {
-        a == .denied
-            ? "macOS didn't let this version of Soyla read your saved API key. Quit and reopen Soyla, then type your Mac password and click Always Allow."
-            : "macOS is asking for your Mac password so this new version of Soyla can read your saved API key. Type it and click Always Allow. This happens once after each update."
-    }
-    var body: some View { Callout(.warn, Self.text(access)) }
-}
-
-/// The one amber line on Home: what is missing and which Settings page fixes it first.
-struct SetupBanner: Equatable {
-    var permissionsMissing: Int
-    var keyMissing: Bool
-    /// FE-5: the free engine's model is not ready (EngineCopy.attention). Never "API key"; there is no key to add.
-    var engineNote: String?
-
-    init(permissions: PermissionState, keyMissing: Bool, engineNote: String? = nil) {
-        var n = 0
-        if permissions.mic != .granted { n += 1 }
-        if !permissions.ax { n += 1 }
-        if !permissions.inputMonitoringOK { n += 1 }
-        self.permissionsMissing = n
-        self.keyMissing = keyMissing
-        self.engineNote = engineNote
-    }
-
-    var isNeeded: Bool { permissionsMissing > 0 || keyMissing || engineNote != nil }
-    /// Settings page to open; permissions come first.
-    var target: SettingsPage { permissionsMissing > 0 ? .permissions : .apiKeys }   // `.apiKeys` is the Engine page
-    var text: String {
-        let perms = permissionsMissing == 1 ? "1 permission" : "\(permissionsMissing) permissions"
-        switch (permissionsMissing > 0, keyMissing) {
-        case (true, true): return "Soyla needs \(perms) and an API key"
-        case (true, false): return "Soyla needs \(perms)"
-        case (false, true): return "Soyla needs an API key"
-        default: return engineNote ?? ""
-        }
-    }
-}
-
 /// "Today 15:41 · Notes · 12 s" for a dictation card. Main actor: only views call it, and it uses `RunsView.when`.
 @MainActor
 enum NoteMeta {
@@ -418,54 +366,5 @@ enum NoteMeta {
     }
     static func duration(_ s: Double, t: AppStrings = .en) -> String {
         s < 60 ? "\(max(1, Int(s.rounded()))) \(t.secs)" : String(format: "%d:%02d", Int(s) / 60, Int(s) % 60)
-    }
-}
-
-/// Settings → Permissions (also shown by the Setup Assistant); live via AppStatus.permissions.
-struct PermissionsGroup: View {
-    @ObservedObject var status: AppStatus
-    /// The engine in use: the Speech Recognition row shows only for `.apple` on macOS 14–15 (FE-3).
-    var provider: ProviderKind = .openRouter
-    private var showsSpeech: Bool { OnDeviceAvailability.showsSpeechPermissionRow(osMajor: AppStatus.osMajor, provider: provider) }
-    private var speechOK: Bool { status.permissions.speech == .authorized }
-    var body: some View {
-        SettingsGroup(footer: status.allPermissions && (!showsSpeech || speechOK) ? nil
-                      : "Turn Soyla on in each list. This updates by itself, no restart needed.") {
-            PermissionRow(name: "Accessibility", detail: "Pastes the text where your cursor is", ok: status.accessibility,
-                          url: PermissionLinks.accessibility,
-                          request: { _ = Permissions.accessibilityTrusted(prompt: true) })
-            PermissionRow(name: "Input Monitoring", detail: "Notices when you hold the hotkey", ok: status.inputMonitoring,
-                          url: PermissionLinks.inputMonitoring,
-                          request: { _ = Permissions.inputMonitoring(prompt: true) })
-            PermissionRow(name: "Microphone", detail: "Records your voice", ok: status.permissions.mic == .granted,
-                          url: PermissionLinks.microphone, divider: showsSpeech,
-                          request: { AVCaptureDevice.requestAccess(for: .audio) { _ in } })
-            if showsSpeech {
-                PermissionRow(name: "Speech Recognition", detail: "Turns your voice into text on this Mac", ok: speechOK,
-                              url: PermissionLinks.speechRecognition, divider: false,
-                              request: { [status] in
-                                  Task { _ = await OnDeviceProbe.requestSpeechAuthorization(); status.refreshPermissions() }
-                              })
-            }
-        }
-    }
-}
-
-struct PermissionRow: View {
-    let name: String, detail: String, ok: Bool, url: String
-    var divider = true
-    var request: () -> Void = {}
-    var body: some View {
-        Row(label: name, caption: detail, divider: divider) {
-            HStack(spacing: Ink.s3) {
-                StatusLine(color: ok ? Ink.ok : Ink.warn, text: ok ? "On" : "Off")
-                if !ok {
-                    Button("Grant…") {
-                        request()   // adds Soyla to the system list (and shows the OS prompt the first time)
-                        if let u = URL(string: url) { NSWorkspace.shared.open(u) }
-                    }.controlSize(.small)
-                }
-            }
-        }
     }
 }

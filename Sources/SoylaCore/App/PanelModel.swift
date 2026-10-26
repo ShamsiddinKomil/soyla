@@ -17,6 +17,8 @@ public struct PillFailure: Equatable, Sendable {
 
     /// Map any pipeline error to something a person can act on. Raw details go to logs/app.log, not the pill.
     public static func from(_ error: Error, stage: String) -> PillFailure {
+        // D26 (a): a stock invented phrase on a quiet clip reads like an empty transcript.
+        if error is StockPhraseDropped || error is ShortJunkDropped { return from(SoylaError.emptyTranscript, stage: stage) }
         if error is ScriptCheckError {
             // F3: the transcript came back in the wrong script twice (Korean for Uzbek, Uzbek in Cyrillic). Not pasted.
             return .init(kind: .warning, title: "Didn't understand that", hint: "Nothing was pasted. Retry, or say it again.", canRetry: true)
@@ -41,19 +43,15 @@ public struct PillFailure: Equatable, Sendable {
                     ? .init(kind: .warning, title: "Soyla can't read your API key", hint: "Quit and reopen Soyla, then click Always Allow.", canRetry: false)
                     : .init(kind: .warning, title: "Waiting for your Mac password", hint: "Type it in the macOS dialog, click Always Allow, then retry.", canRetry: true)
             case .http(let code, _):
-                switch code {
-                case 401, 403: return .init(kind: .error, title: "Your API key was refused", hint: "Replace it in Languages.", openSettings: true, fix: .connectKey)
-                case 402: return .init(kind: .error, title: "Out of OpenRouter credit", hint: "Top up at openrouter.ai, then retry.", canRetry: true)
-                case 429: return .init(kind: .error, title: "Too many requests", hint: "Wait a few seconds, then retry.", canRetry: true)
-                case 408, 500...599: return .init(kind: .error, title: "The speech service is having trouble", hint: "It's usually brief. Retry in a moment.", canRetry: true)
-                default: return .init(kind: .error, title: "Transcription failed (HTTP \(code))", hint: Self.otherModel, canRetry: true)
-                }
+                return httpCard(code)
             case .onDeviceUnavailable(let reason):
                 return .onDevice(reason: reason)
             case .emptyTranscript:
                 return .init(kind: .soft, title: "No speech heard", hint: "")
             case .decode:
                 return .init(kind: .error, title: "The server sent an odd reply", hint: Self.otherModel, canRetry: true)
+            case .insecureEndpoint:
+                return .init(kind: .error, title: "This server needs https", hint: "Change its address in Languages → Custom.")
             case .permission:
                 return .init(kind: .warning, title: "Not pasted: it's on your clipboard", hint: Self.allowAccessibility, openSettings: true,
                              fix: .setup(.permissions))
@@ -66,6 +64,17 @@ public struct PillFailure: Equatable, Sendable {
             return .init(kind: .error, title: "Microphone problem", hint: "Try again. If it repeats, choose another mic in System Settings → Sound.")
         }
         return .init(kind: .error, title: "Something went wrong", hint: Self.otherModel, canRetry: true)
+    }
+
+    /// The card for an HTTP error status from the speech service.
+    static func httpCard(_ code: Int) -> PillFailure {
+        switch code {
+        case 401, 403: return .init(kind: .error, title: "Your API key was refused", hint: "Replace it in Languages.", openSettings: true, fix: .connectKey)
+        case 402: return .init(kind: .error, title: "Out of OpenRouter credit", hint: "Top up at openrouter.ai, then retry.", canRetry: true)
+        case 429: return .init(kind: .error, title: "Too many requests", hint: "Wait a few seconds, then retry.", canRetry: true)
+        case 408, 500...599: return .init(kind: .error, title: "The speech service is having trouble", hint: "It's usually brief. Retry in a moment.", canRetry: true)
+        default: return .init(kind: .error, title: "Transcription failed (HTTP \(code))", hint: otherModel, canRetry: true)
+        }
     }
 
     static let noKeyTitle = "No API key yet"
@@ -120,7 +129,7 @@ public struct PillFailure: Equatable, Sendable {
 /// Observable state shared by the floating panel and the menu bar.
 ///
 /// The pipeline drives `phase`, `elapsedSec`, `level`, `micLive`, `warn` and the texts. Everything the pill
-/// derives from those (smoothed level, arming look, wait stage, caption) is computed here so it is testable.
+/// derives from those (smoothed level, wait stage, caption) is computed here so it is testable.
 /// Whether the hotkey is physically down (`PanelModel.hotkeyHeld`).
 @MainActor @Observable
 final class HotkeyKeyState {
@@ -156,9 +165,7 @@ public final class PanelModel: ObservableObject {
     /// What the bars show: the current RMS mapped to dB. The only smoothing is `Waveform.ease`, per frame.
     public var displayLevel: Double { PillGeometry.level(rms: (levelSource?() ?? nil) ?? level) }
     /// First audio buffer arrived: the mic is really capturing (cold start takes 230–420 ms).
-    @Published public var micLive = false { didSet { if micLive { arming = false } } }
-    /// Recording but no audio yet for more than 80 ms: dimmed bars + muted dot (skipped on a warm mic).
-    @Published public private(set) var arming = false
+    @Published public var micLive = false
     /// Processing time bucket: drives "Still working…" (2 s) and "Taking longer than usual… · Cancel" (4 s).
     @Published public private(set) var waitStage: PillWaitStage = .quiet
     @Published public var warn: Bool = false
@@ -197,6 +204,8 @@ public final class PanelModel: ObservableObject {
     /// Pill extras, mirrored from Settings at each key-down. Off by default: the pill only animates.
     @Published public var showLiveText = false
     @Published public var showDetails = false
+    /// D26(b): the language-set chip while recording ("RU", "UZ·EN"); nil for the default set. Set at reveal.
+    @Published public var languageChip: String?
     /// Mirrored from Settings by the panel at show: amber from `warnAtSec`, red near `hardStopSec`.
     @Published public var warnAtSec: Double = 45
     @Published public var hardStopSec: Double = 55
@@ -263,7 +272,7 @@ public final class PanelModel: ObservableObject {
     public var hotkeyShortLabel: String { hotkeyLabel.components(separatedBy: " (").first ?? hotkeyLabel }
 
     public func reset() {
-        elapsedSec = 0; level = 0; micLive = false; arming = false; warn = false; liveText = ""
+        elapsedSec = 0; level = 0; micLive = false; warn = false; liveText = ""
         locked = false; tapPending = false; notice = nil; silentInput = false
         rawText = ""; cleanText = ""; latencyLine = ""; errorText = ""; failure = nil
     }
@@ -289,21 +298,8 @@ public final class PanelModel: ObservableObject {
 
     private func phaseChanged(from old: Phase) {
         let wasProcessing = Self.processingPhases.contains(old)
-        if phase == .recording { startArmingClock() } else { arming = false }
         if isProcessing && !wasProcessing { startWaitClock() }
         if !isProcessing { clockToken += 1; processingStartedAt = nil; if waitStage != .quiet { waitStage = .quiet } }
-    }
-
-    private func startArmingClock() {
-        arming = false
-        clockToken += 1
-        let tok = clockToken
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self, self.clockToken == tok, self.phase == .recording, !self.micLive else { return }
-                self.arming = true
-            }
-        }
     }
 
     private func startWaitClock() {
@@ -313,11 +309,9 @@ public final class PanelModel: ObservableObject {
         processingStartedAt = start
         waitStage = .quiet
         for t in [PillGeometry.labelAfter, PillGeometry.stillWorkingAfter, PillGeometry.slowAfter] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + t) { [weak self] in
-                MainActor.assumeIsolated {
-                    guard let self, self.clockToken == tok, self.isProcessing else { return }
-                    self.waitStage = PillGeometry.waitStage(elapsed: Date().timeIntervalSince(start) + 0.001)
-                }
+            Task { [weak self] in
+                guard await MainDelay.elapsed(t), let self, self.clockToken == tok, self.isProcessing else { return }
+                self.waitStage = PillGeometry.waitStage(elapsed: Date().timeIntervalSince(start) + 0.001)
             }
         }
     }

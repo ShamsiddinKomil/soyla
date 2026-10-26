@@ -179,7 +179,7 @@ If an update broke something, you can install the previous one. Your settings an
 1. Choose **Quit Soyla** from the menu bar icon.
 2. Open [github.com/ShamsiddinKomil/soyla/releases](https://github.com/ShamsiddinKomil/soyla/releases). Every release note ends with a link to the previous version's zip.
 3. Download that `Soyla-vX.Y.Z.zip`, open it, and drag **Soyla** into Applications, replacing the newer one.
-4. If macOS asks for your password about the Keychain, type it and click **Always Allow**. If Accessibility or Input Monitoring show as off, switch Soyla off and on again in System Settings.
+4. Versions before the key file kept keys in the Keychain and won't see your saved key: connect it again. If Accessibility or Input Monitoring show as off, switch Soyla off and on again in System Settings.
 5. Soyla may offer the newer version again. Settings, About, **Check daily** can be turned off. Please also tell us what broke: menu bar icon, **Report a Problem…**.
 
 ## Still stuck
@@ -188,4 +188,8 @@ Choose **Report a Problem…** from the menu bar icon (or the Help menu): it sho
 
 ## macOS asks for your password: "soyla wants to use your confidential information"
 
-Soyla keeps your key in the Keychain. Because Soyla is not signed with a paid Apple certificate, macOS asks once after each update whether the new version may read it. All your keys sit in one Keychain item called *Soyla API keys*, so it is one dialog, not one per key. Type your Mac login password and click **Always Allow** (plain **Allow** works only once, so it would ask again next time). While the dialog is open, Soyla's window says so and dictation waits. If you click **Deny**, Soyla can't use the key until you quit and reopen it and click Always Allow. Your key is not lost either way, so don't paste it again.
+Older versions kept your key in the Keychain, and macOS asked for your password after every update. Soyla now keeps it in a private file instead, so this happens **one last time**: the first launch after updating, Soyla moves the key out of the Keychain item *Soyla API keys* into the file and deletes the item. Type your Mac login password and click **Allow**. While the dialog is open, Soyla's window says so and dictation waits. If you click **Deny**, nothing is moved or lost; quit and reopen Soyla and allow it then. If Soyla says it couldn't open the Keychain, quit and reopen it; your keys stay where they are until the move works. After the move, updates no longer ask.
+
+## "Soyla can't read its saved keys file"
+
+The key file (`~/Library/Application Support/Soyla/keys.json`) is damaged or can't be opened. Connect your key again on Home or in Settings, Languages; that replaces the file. If it keeps happening, check that the folder belongs to you: `ls -le ~/Library/Application\ Support/Soyla`.

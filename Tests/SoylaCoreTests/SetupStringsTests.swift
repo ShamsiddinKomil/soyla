@@ -51,7 +51,7 @@ import Foundation
         let joined = strings(t).joined(separator: " ").lowercased()
         #expect(!joined.contains("kalit") && !joined.contains("bulut"))
         #expect(joined.contains("api key") && joined.contains("cloud"))
-        #expect(t.cTitle(.uz) == "O‘zbek tili uchun API key ulang")
+        #expect(t.cTitle(.uz) == "O‘zbek tili uchun API\u{00A0}key ulang")   // D24 / R-12: no break inside "API key"
         #expect(t.dnTry(.ru) == "Rus tilida sinab ko‘ring")
         #expect(t.gMic.contains("**Allow**") && t.gFn.contains("**Do Nothing**"))
     }

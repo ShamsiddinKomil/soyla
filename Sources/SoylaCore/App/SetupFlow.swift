@@ -59,7 +59,8 @@ public struct SetupFlow: Equatable, Sendable {
     public private(set) var awaiting: SystemSurface?
 
     // Connect
-    public private(set) var provider: SetupProvider = .google
+    /// D3 (owner, 2026-10-25): OpenRouter is pre-selected and listed first; Google stays as the free option.
+    public private(set) var provider: SetupProvider = .openRouter
     public private(set) var keyState: SetupKeyState = .idle
 
     // Try / Done
@@ -212,10 +213,14 @@ public struct SetupFlow: Equatable, Sendable {
 
     /// English always (it works on every Mac), then each chosen cloud language; only the first missing one gets
     /// the Connect… button.
-    public var doneRows: [DoneRow] {
+    public var doneRows: [DoneRow] { doneRows(englishReady: true) }
+    /// `englishReady`: English's route has a key (false while setup leaves a hosted engine with none on file). D22 /
+    /// R-15: then English is the first waiting row and gets the Connect… button (when there is a Connect step).
+    public func doneRows(englishReady: Bool) -> [DoneRow] {
         // F-03: English only when chosen (its caption follows the engine in the view, from `LanguageRoute`).
-        var rows = languages.contains(.en) ? [DoneRow(language: .en, status: .readyOnDevice)] : []
-        var buttonShown = false
+        let enFirst = englishWaits(englishReady: englishReady) && needsCloud
+        var rows = languages.contains(.en) ? [DoneRow(language: .en, status: enFirst ? .connectButton : .readyOnDevice)] : []
+        var buttonShown = enFirst
         for l in cloudLanguages {
             if connected { rows.append(DoneRow(language: l, status: .readyCloud)); continue }
             rows.append(DoneRow(language: l, status: buttonShown ? .needsKey : .connectButton))
@@ -347,6 +352,12 @@ public struct SetupFlow: Equatable, Sendable {
         if let r = returnTo { step = r; returnTo = nil } else { go(.done) }
     }
 
+    /// D22 / R-05: Try with nothing that can transcribe (no key, and English waits for one) shows the key nudge.
+    public mutating func connectFromTry() {
+        guard step == .tryIt, needsCloud else { return }
+        returnTo = .tryIt; go(.connect)
+    }
+
     /// Done → Connect…; a successful key returns to Done.
     public mutating func connectLater() {
         guard step == .done, needsCloud else { return }
@@ -421,23 +432,32 @@ extension SetupFlow {
         }
     }
     /// The app's shared answer, from what setup knows (the same `Readiness` Home and the menu read).
-    public var readiness: Readiness {
-        Readiness(micMissing: mic != .granted, axMissing: !ax, englishNeedsKey: false, missing: connected ? nil : cloudCombo)
+    public var readiness: Readiness { readiness(englishReady: true) }
+    /// `englishReady`: English's route has a key (`SetupModel.route`); false = a hosted engine with none on file.
+    public func readiness(englishReady: Bool) -> Readiness {
+        Readiness(micMissing: mic != .granted, axMissing: !ax, englishNeedsKey: !englishReady,
+                  missing: connected ? nil : cloudCombo, englishChosen: languages.contains(.en))
     }
+    /// D22: English is chosen and waits for a key, so the copy says "Soyla needs an API key".
+    public func englishWaits(englishReady: Bool) -> Bool { languages.contains(.en) && !englishReady && !connected }
+    /// D22 / R-05: nothing can transcribe the practice sentence (English unless a cloud key is connected).
+    public func tryWaitsForKey(englishReady: Bool) -> Bool { !connected && !englishReady }
     /// V-09: entered from the app, Permissions' Done always closes setup (Home keeps nudging what is missing), and so
     /// does Try's while a permission is missing (there is nothing to try). `canContinue` keeps its meaning.
-    public var primaryEnabled: Bool {
+    public var primaryEnabled: Bool { primaryEnabled(englishReady: true) }
+    /// D22: Try entered from the app can also be left while it waits for a key (there is nothing to try).
+    public func primaryEnabled(englishReady: Bool) -> Bool {
         guard fromApp else { return canContinue }
         switch step {
         case .permissions: return true
-        case .tryIt: return canContinue || readiness.isBlocked
+        case .tryIt: return canContinue || readiness.isBlocked || tryWaitsForKey(englishReady: englishReady)
         default: return canContinue
         }
     }
 
     /// The primary when `canContinue` is false but `primaryEnabled` is true: close setup as it stands.
-    public mutating func leave() {
-        guard fromApp, primaryEnabled else { return }
+    public mutating func leave(englishReady: Bool = true) {
+        guard fromApp, primaryEnabled(englishReady: englishReady) else { return }
         finished = true
     }
 }

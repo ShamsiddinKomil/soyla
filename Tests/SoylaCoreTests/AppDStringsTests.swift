@@ -30,7 +30,7 @@ import Foundation
         var out: [(String, String)] = [
             ("dcLimit", d.dcLimit(3)), ("phInterrupted", d.phInterrupted(1.5)), ("phInterruptedRetry", d.phInterruptedRetry(1.5)),
             ("keyA11y", d.keyA11y("fn")), ("pcIdle", d.pcIdle("fn")), ("pcReady", d.pcReady("fn")),
-            ("pcLockedHint", d.pcLockedHint("fn")), ("pcLeft", d.pcLeft(7)), ("pcLocked", d.pcLocked("7 s")),
+            ("pcLeft", d.pcLeft(7)),
             ("upAvail", d.upAvail("v9.9.9")), ("upToDateText", d.upToDateText("9.9.9")), ("upButton", d.upButton("9.9.9")),
             ("ucRestart", d.ucRestart("9.9.9")), ("ucDownloading", d.ucDownloading(42)), ("ucA11y", d.ucA11y("9.9.9", "FAKE")),
             ("ceEnv.env", d.ceEnv(true)), ("ceEnv.file", d.ceEnv(false)),

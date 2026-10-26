@@ -58,7 +58,7 @@ import Foundation
     }
 
     @Test func wordsForWhatTheUserSees() {
-        #expect(AppStrings.en.eWhere == "Where it runs" && AppStrings.uz.eWhere == AppStrings.uz.engine)
+        #expect(AppStrings.en.eWhere == "Where it runs" && AppStrings.uz.eWhere == "Qayerda ishlaydi")
         #expect(AppStrings.en.plSoundsC == "Start and stop")
         #expect(AppStrings.en.modelCFull != AppStrings.en.modelC)
         #expect(AppStrings.ru.plSub != AppStrings.ru.page[.pill] && !AppStrings.ru.plSub.contains("Индикатор"))

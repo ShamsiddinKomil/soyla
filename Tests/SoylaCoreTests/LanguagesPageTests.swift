@@ -132,10 +132,10 @@ import Foundation
     @Test func languagesPageMatchesThePrototype() {
         let t = AppStrings.en
         #expect(t.eTitle == "Languages" && t.eSub == "Where each language turns into text." && t.eInfo.count == 3)
-        #expect(t.engine == "Engine" && t.eCloudC == "All languages, mixed sentences" && t.eMacC == "English only · free, offline")
+        #expect(t.eCloudC == "All languages, mixed sentences" && t.eMacC == "English only · free, offline")
         #expect(t.key == "API key" && t.notAdded == "Not added" && t.replace == "Replace…" && t.connected == "Connected")
         #expect(t.macModel == "English speech model" && t.macModelC == "Apple · offline" && t.modelC == "Flash-Lite: faster, less exact")
-        #expect(AppStrings.uz.engine == "Qayerda ishlaydi" && AppStrings.ru.eCloud == "Облако" && AppStrings.ru.key == "API-ключ")
+        #expect(AppStrings.ru.eCloud == "Облако" && AppStrings.ru.key == "API-ключ")
     }
 
     @Test func mainMenuIsLocalized() {

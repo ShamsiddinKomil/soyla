@@ -19,13 +19,6 @@ import Foundation
         }
     }
 
-    @Test func freeCardIsEnglishOnlyWithNoLanguagePicker() {
-        #expect(EngineCopy.freeSubtitle.contains("English only"))
-        #expect(!EngineCopy.freeSubtitle.contains("Russian") && !EngineCopy.freePrivacy.contains("Russian"))
-        #expect(EngineCopy.freePrivacy.contains("never leaves this Mac"))
-        #expect(EngineCopy.cloudSubtitle.contains("Uzbek") && EngineCopy.cloudSubtitle.contains("Russian"))
-    }
-
     @Test func attentionNeverSaysApiKeyForTheFreeEngine() {
         #expect(EngineCopy.attention(provider: .apple, state: .ready) == nil)
         #expect(EngineCopy.attention(provider: .apple, state: nil) == nil)
@@ -95,24 +88,8 @@ import Foundation
     }
 }
 
-// FE-5: the Home banner for the free engine (never "API key").
+// FE-5: the History meta line names the engine (the old SetupBanner tests went with it, D12).
 @Suite struct EngineBannerTests {
-    private let ok = PermissionState(mic: .granted, ax: true, inputMonitoring: true)
-
-    @Test func freeEngineModelNotReadyShowsTheModelNotAKey() {
-        let note = EngineCopy.attention(provider: .apple, state: .downloading(0.42))
-        let b = SetupBanner(permissions: ok, keyMissing: false, engineNote: note)
-        #expect(b.isNeeded && b.text == "English model downloading (42%)" && b.target == .apiKeys)
-        #expect(!b.text.contains("key"))
-    }
-
-    @Test func permissionsStillComeFirstAndReadyIsQuiet() {
-        let missing = PermissionState(mic: .granted, ax: false, inputMonitoring: true)
-        let b = SetupBanner(permissions: missing, keyMissing: false, engineNote: "English model needs a download — open Settings")
-        #expect(b.text == "Soyla needs 1 permission" && b.target == .permissions)
-        #expect(!SetupBanner(permissions: ok, keyMissing: false, engineNote: EngineCopy.attention(provider: .apple, state: .ready)).isNeeded)
-    }
-
     @MainActor @Test func historyMetaLineCarriesTheEngine() {
         var r = RunRecord(runId: "r1", ts: "2026-10-17T10:00:00.000Z", source: "live", phraseId: nil, model: "en-US",
                           cleanup: false, cleanupModel: nil, languageHint: nil, prewarm: false,

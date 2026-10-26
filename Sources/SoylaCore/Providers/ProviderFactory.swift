@@ -59,14 +59,14 @@ public enum ProviderFactory {
             throw SoylaError.decode("custom base URL is not a valid URL")
         }
         if scheme != "https" && !(scheme == "http" && isLocalHost(host)) {
-            throw SoylaError.decode("custom base URL must use https (http is allowed only for localhost)")
+            throw SoylaError.insecureEndpoint
         }
         return u
     }
 
-    /// Plain http is only safe on this machine / the local network name space (R1).
+    /// Plain http is only safe on this Mac (R1). D7: no `.local` names; on shared Wi-Fi another device can answer for one.
     static func isLocalHost(_ host: String) -> Bool {
         let h = host.trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
-        return h == "localhost" || h == "127.0.0.1" || h == "::1" || h.hasSuffix(".local")
+        return h == "localhost" || h == "127.0.0.1" || h == "::1"
     }
 }

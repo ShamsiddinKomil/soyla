@@ -48,7 +48,7 @@ You need a Google account (18 or older). Uzbekistan is on Google's list of suppo
 
 ## Step 2. Paste it into Soyla
 
-Your key is stored in the **macOS Keychain** on your Mac. Soyla never writes it to a text file and never logs it.
+Your key is stored on your Mac in a private file that only your user account can open (`~/Library/Application Support/Soyla/keys.json`). Soyla never logs it and never sends it anywhere except to the service it belongs to. [More on how it is kept](SECURITY_MODEL.md#keys).
 
 1. Open Soyla. On **Home**, click **Connect…** next to Uzbek or Russian. (Or go to **Languages** in the sidebar. In the Setup Assistant, the **Connect** step shows the same thing.)
 
@@ -93,7 +93,7 @@ To use the other service, click its tile under **Cloud** on the Languages page. 
 
 ## Custom endpoint (advanced)
 
-If you run your own server, or use another service that speaks the OpenAI chat API, Soyla can use it. Open **Developer** in the sidebar and turn on **Developer mode**. A **Custom** service then appears under **Cloud** on the Languages page (that section shows once you have connected a key), with a **Base URL** and a **Model** field. Soyla posts to `{base}/chat/completions`. The address must be `https`. Plain `http` is allowed only for a server on this Mac (`localhost`, `127.0.0.1`) or a `.local` name on your network; on shared Wi-Fi another device can pretend to be a `.local` name, so use `https` there.
+If you run your own server, or use another service that speaks the OpenAI chat API, Soyla can use it. Open **Developer** in the sidebar and turn on **Developer mode**. A **Custom** service then appears under **Cloud** on the Languages page (that section shows once you have connected a key), with a **Base URL** and a **Model** field. Soyla posts to `{base}/chat/completions`. The address must be `https`. Plain `http` is allowed only for a server on this Mac (`localhost`, `127.0.0.1`, `::1`). A server elsewhere on your network needs `https`: on shared Wi-Fi another device can pretend to be it.
 
 ## Safety
 

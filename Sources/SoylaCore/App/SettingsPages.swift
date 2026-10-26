@@ -25,7 +25,7 @@ struct PrivacyPage: View {
                 }
             }
             AppSection(title: t.recs) {
-                AppRow(label: t.keep, caption: t.keepC, info: (t.keepA, [t.keepI])) {
+                AppRow(label: t.keep, caption: t.keepC, info: (t.keep, [t.keepI])) {
                     Picker(t.keep, selection: $m.s.retention) {
                         ForEach(retentionChoices, id: \.self) { Text(retention($0)).tag($0) }
                     }.appControl()
@@ -39,7 +39,7 @@ struct PrivacyPage: View {
                 .help((SoylaPaths.root.path as NSString).abbreviatingWithTildeInPath)
             }
             AppSection(title: t.mic) {
-                AppRow(label: t.warm, caption: t.warmC, info: (t.warmA, [t.warmI])) {
+                AppRow(label: t.warm, caption: t.warmC, info: (t.warm, [t.warmI])) {
                     Picker(t.warm, selection: $m.s.micWarmMode) {
                         ForEach(MicWarmMode.allCases, id: \.self) { Text(warm($0)).tag($0) }
                     }.appControl()
@@ -124,7 +124,7 @@ struct PermissionsPage: View {
         let missing = [p.mic != .granted, !p.ax, fnRow && !fnOK, im, speech && !speechOK]
         let first = missing.firstIndex(of: true)
         AppPage(title: t.page[.permissions] ?? "", sub: t.permSub) {
-            AppSection(title: t.perms) {          // V-24: one status per row, none on the header
+            AppSection {          // V-24: one status per row, none on the header; D24 / R-13: no second "Permissions"
                 AppRow(symbol: "mic", label: t.pMic, caption: p.mic == .denied ? st.pMicDenied : t.pMicC) {
                     allow(p.mic == .granted, primary: first == 0) { openSetup(.permissions) }
                 }
@@ -177,6 +177,7 @@ struct PermissionsPage: View {
 struct DictationPage: View {
     @ObservedObject var m: SettingsModel
     fileprivate var t: AppStrings { .for(m.s.uiLanguage) }
+    private var ls: LanguageSetStrings { .for(m.s.uiLanguage) }
 
     var body: some View {
         AppPage(title: t.page[.dictation] ?? "", sub: t.dicSub) {
@@ -184,13 +185,23 @@ struct DictationPage: View {
             // "Engine" card here; the Languages page says where each language runs.)
             if m.s.provider != .apple {
                 AppSection {
+                    // D26(b): the set; "Mainly speak" below is the optional primary among the ticked languages.
+                    AppRow(label: ls.title, caption: ls.caption, info: (ls.title, [ls.info])) {
+                        HStack(spacing: Ink.s3) {
+                            ForEach(LanguageSet.all, id: \.self) { code in
+                                Toggle(SpokenLanguage(rawValue: code).flatMap { t.n[$0] } ?? code,
+                                       isOn: Binding(get: { m.s.languages.contains(code) }, set: { _ in m.s.toggleLanguage(code) }))
+                                    .toggleStyle(.checkbox).disabled(m.s.languages == [code])
+                            }
+                        }.fixedSize().tint(Ink.lazur)
+                    }
                     AppRow(label: t.dLang, caption: t.dLangC, info: (t.dLang, [t.dLangI])) {
                         Picker(t.dLang, selection: Binding(get: { m.s.languageHint ?? "" }, set: { m.s.languageHint = $0.isEmpty ? nil : $0 })) {
                             Text(t.langAuto).tag("")
-                            ForEach(SpokenLanguage.allCases, id: \.self) { Text(t.n[$0] ?? $0.rawValue).tag($0.rawValue) }
+                            ForEach(SpokenLanguage.allCases.filter { m.s.languages.contains($0.rawValue) }, id: \.self) { Text(t.n[$0] ?? $0.rawValue).tag($0.rawValue) }
                         }.appControl()
                     }
-                    AppRow(label: t.dClean, caption: t.dCleanC, info: (t.dClean, [t.dCleanI])) {
+                    AppRow(label: t.dClean, caption: m.s.cleanupLevel == .off ? t.d.rsRawC : t.dCleanC, info: (t.dClean, [t.dCleanI])) {
                         Picker(t.dClean, selection: $m.s.cleanupLevel) {
                             ForEach(CleanupLevel.allCases, id: \.self) { Text($0 == .off ? t.cleanOff : t.cleanLight).tag($0) }
                         }.appControl()
@@ -245,6 +256,7 @@ struct DictionarySections: View {
             TextEditor(text: $m.vocabularyText)
                 .font(.system(size: SetupScale.type(13))).frame(height: 76)
                 .scrollContentBackground(.hidden)
+                .scrollIndicators(.never)          // D24 / R-17: no empty scroll-bar track with a mouse attached
                 .padding(8)
                 .background(RoundedRectangle(cornerRadius: Ink.rControl, style: .continuous).fill(Ink.well))
                 .overlay(RoundedRectangle(cornerRadius: Ink.rControl, style: .continuous).strokeBorder(Ink.hairline))

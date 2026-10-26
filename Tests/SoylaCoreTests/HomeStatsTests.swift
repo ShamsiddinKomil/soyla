@@ -37,15 +37,4 @@ import Foundation
         let none = TodayStats.compute([], now: Self.noon, calendar: cal)
         #expect(none == TodayStats() && none.waitText == "–")
     }
-
-    @Test func bannerText() {
-        let ok = PermissionState(mic: .granted, ax: true, inputMonitoring: true)
-        #expect(!SetupBanner(permissions: ok, keyMissing: false).isNeeded)
-        let two = SetupBanner(permissions: PermissionState(mic: .granted, ax: false, inputMonitoring: false), keyMissing: true)
-        #expect(two.text == "Soyla needs 2 permissions and an API key" && two.target == .permissions)
-        let one = SetupBanner(permissions: PermissionState(mic: .denied, ax: true, inputMonitoring: true), keyMissing: false)
-        #expect(one.text == "Soyla needs 1 permission")
-        let key = SetupBanner(permissions: ok, keyMissing: true)
-        #expect(key.text == "Soyla needs an API key" && key.target == .apiKeys)
-    }
 }

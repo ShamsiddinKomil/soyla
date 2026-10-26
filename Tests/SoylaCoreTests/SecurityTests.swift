@@ -26,7 +26,8 @@ import Security
         #expect(try ProviderFactory.customBase("http://localhost:8080/v1") == "http://localhost:8080/v1")
         #expect(try ProviderFactory.customBase("http://127.0.0.1:1234/v1") == "http://127.0.0.1:1234/v1")
         #expect(try ProviderFactory.customBase("http://[::1]:8080/v1") == "http://[::1]:8080/v1")
-        #expect(try ProviderFactory.customBase("http://studio.local:8080/v1") == "http://studio.local:8080/v1")
+        // D7 (owner, 2026-10-26): only this Mac; another device on shared Wi-Fi can answer for a `.local` name.
+        #expect(throws: SoylaError.self) { _ = try ProviderFactory.customBase("http://studio.local:8080/v1") }
         #expect(throws: SoylaError.self) { _ = try ProviderFactory.customBase("http://api.example.com/v1") }
         #expect(throws: SoylaError.self) { _ = try ProviderFactory.customBase("http://localhost.evil.com/v1") }
         #expect(throws: SoylaError.self) { _ = try ProviderFactory.customBase("ftp://localhost/v1") }
@@ -134,5 +135,34 @@ import Security
         #expect(s.sttModel == "x/y" && s.vocabulary == ["Soyla"] && s.warnAtSec == 42)
     }
 
-    @Test func versionIsRelease() { #expect(Soyla.version == "0.2.0") }
+    /// The app version is the newest dated release in CHANGELOG.md (`## [X.Y.Z] - YYYY-MM-DD`), so a release bump
+    /// is one place, not a test edit (owner D2, 2026-10-25).
+    @Test func versionIsRelease() throws {
+        let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let log = try String(contentsOf: repo.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)
+        let newest = log.split(separator: "\n").lazy
+            .compactMap { $0.wholeMatch(of: /## \[(\d+\.\d+\.\d+)\] - \d{4}-\d{2}-\d{2}/)?.1 }.first
+        #expect(newest.map(String.init) == Soyla.version)
+    }
+}
+
+/// D8: Developer → Last request never shows dictated text, only its length.
+@Suite struct LastRequestRedactionTests {
+    @Test func textValuesShowOnlyTheirLength() {
+        #expect(LastRequestView.displayValue(key: "live_text", value: "FAKE dictated words") == "19 characters")
+        #expect(LastRequestView.displayValue(key: "transcript", value: "FAKE") == "4 characters")
+        #expect(LastRequestView.displayValue(key: "cleanup_rejected", value: "FAKE cleaned") == "12 characters")
+        #expect(!LastRequestView.displayValue(key: "live_text", value: "FAKE secret").contains("secret"))
+    }
+
+    @Test func otherValuesShowAsIs() {
+        #expect(LastRequestView.displayValue(key: "finish_reason", value: "stop") == "stop")
+        #expect(LastRequestView.displayValue(key: "live_first_text_ms", value: "840") == "840")
+        #expect(LastRequestView.displayValue(key: "live_final", value: "1") == "1")
+    }
+
+    @Test func errorLineDropsTheResponseBody() {
+        #expect(LastRequestView.displayError("HTTP 500 body: FAKE dictated words") == "HTTP 500 [body omitted]")
+        #expect(LastRequestView.displayError("timed out") == "timed out")
+    }
 }

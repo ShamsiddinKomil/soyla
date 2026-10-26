@@ -33,9 +33,17 @@ public struct TranscribeOptions: Sendable {
     /// dedicated transcribe models, which take no prompt.
     public var extraInstruction: String? = nil
 
-    public init(model: String, languageHint: String? = nil, temperature: Double? = nil,
+    /// D26(b): the speaker's language set (`Settings.languages`). Empty = no set lines in the prompt and the old
+    /// script check (CLI, replay).
+    public var languages: [String] = []
+
+    /// Multiplies the output cap (`TextGuards.sttMaxTokens`). 2 = the resend after a reply was cut off by the cap
+    /// (finish reason MAX_TOKENS / length, `ScriptCheck.notRunaway`).
+    public var maxTokensScale = 1
+
+    public init(model: String, languageHint: String? = nil, languages: [String] = [], temperature: Double? = nil,
                 providerOptions: [String: String] = [:], timeoutSec: Double = 60) {
-        self.model = model; self.languageHint = languageHint; self.temperature = temperature
+        self.model = model; self.languageHint = languageHint; self.languages = languages; self.temperature = temperature
         self.providerOptions = providerOptions; self.timeoutSec = timeoutSec
     }
 }
@@ -82,11 +90,13 @@ public enum SoylaError: Error, LocalizedError, Sendable {
     /// The on-device engine can't run. `reason` is a short machine code ("model-not-installed", "needs-permission",
     /// "unsupported", "recognizer-failed:<domain>:<code>"), never user text (FE-2).
     case onDeviceUnavailable(reason: String)
+    /// A custom server address is plain http but not this Mac (D7).
+    case insecureEndpoint
 
     public var errorDescription: String? {
         switch self {
         case .missingAPIKey(let p): return "API key not found: \(p)"
-        case .keychainBlocked(let denied): return denied ? "Keychain access to the API key was denied" : "waiting for Keychain access to the API key"
+        case .keychainBlocked(let denied): return denied ? "macOS refused to move the API key out of the Keychain" : "waiting for macOS to move the API key out of the Keychain"
         case .http(let s, let b): return "HTTP \(s) body: \(b.prefix(300))"   // " body:" lets logSafe strip it
         case .decode(let m): return "decode: \(m)"
         case .audio(let m): return "audio: \(m)"
@@ -96,11 +106,12 @@ public enum SoylaError: Error, LocalizedError, Sendable {
         case .tooShort(let d): return "recording too short (\(String(format: "%.2f", d)) s)"
         case .cancelled: return "cancelled"
         case .onDeviceUnavailable(let r): return "on-device engine unavailable: \(r)"
+        case .insecureEndpoint: return "custom base URL must use https (http is allowed only for localhost)"
         }
     }
 }
 
-/// Batch (request/response) speech-to-text. Built in v0.1 (OpenRouterSTTProvider).
+/// Batch (request/response) speech-to-text: the cloud providers and the on-device engine.
 public protocol TranscriptionProvider: Sendable {
     var id: String { get }
     /// Must call `timeline.mark(.requestSent)`, `.firstByte` (if known), `.responseReceived`
@@ -108,7 +119,7 @@ public protocol TranscriptionProvider: Sendable {
     func transcribe(_ audio: EncodedAudio, options: TranscribeOptions, timeline: RunTimeline) async throws -> TranscriptResult
 }
 
-/// Streaming push-to-talk speech-to-text. NOT built in v0.1 — seam only (GeminiLiveProvider stub).
+/// Streaming push-to-talk speech-to-text: `GeminiLiveProvider`, for the live preview and the experimental Live fast path.
 public protocol StreamingTranscriptionProvider: Sendable {
     var id: String { get }
     func startSession(options: TranscribeOptions) async throws

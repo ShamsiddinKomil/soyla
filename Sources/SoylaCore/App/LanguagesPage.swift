@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // APP-1 (b): Settings → Languages (was Engine), prototype `engine()`. Which groups show is `LanguagesPageState`
@@ -19,6 +20,7 @@ struct LanguagesPage: View {
     @FocusState private var replaceFocused: Bool
 
     private var t: AppStrings { .for(m.s.uiLanguage) }
+    @State private var legacyScrollers = NSScroller.preferredScrollerStyle == .legacy
     private func hasKey(_ p: KeyProvider) -> Bool { keys.rows[p]?.masked != nil }
     private var service: KeyProvider { chosen ?? LanguagesPageState.defaultService(provider: m.s.provider, hasKey: hasKey) }
 
@@ -30,8 +32,13 @@ struct LanguagesPage: View {
         ViewThatFits(in: .vertical) {
             content(home, st)
             ScrollViewReader { proxy in
-                ScrollView { content(home, st) }.modifier(RevealInlineConnect(model: connect, proxy: proxy))
+                // D24 / R-14: the legacy scroller's width comes back from the right margin (as `AppPage`).
+                ScrollView { content(home, st, trailing: legacyScrollers ? AppPageLayout.scrollTrailing : Ink.appPaneSide) }
+                    .modifier(RevealInlineConnect(model: connect, proxy: proxy))
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSScroller.preferredScrollerStyleDidChangeNotification)) { _ in
+            legacyScrollers = NSScroller.preferredScrollerStyle == .legacy
         }
         .onAppear { Task { await models.refresh(locale: m.s.onDeviceLocale) } }   // read when the page opens, never polled
         .onChange(of: connect.cancelToken) { _, _ in if connect.cancelled == .key { replaceFocused = true } }
@@ -46,15 +53,15 @@ struct LanguagesPage: View {
         }
     }
 
-    private func content(_ home: HomeState, _ st: LanguagesPageState) -> some View {
+    private func content(_ home: HomeState, _ st: LanguagesPageState, trailing: CGFloat = Ink.appPaneSide) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(t.eTitle).font(Ink.Font.appTitle).tracking(-0.74).foregroundStyle(Ink.text).accessibilityAddTraits(.isHeader)
-                InfoButton(label: t.eTitle, paragraphs: t.eInfo, width: 320)
+                InfoButton(label: t.about(t.eTitle), paragraphs: t.eInfo, width: 320)
             }
             Text(t.eSub).font(Ink.Font.appSub).foregroundStyle(Ink.text2).padding(.top, 10)
             if home.keychainNotice {
-                Callout(.warn, status.keychain == .denied ? t.keychainDenied : t.keychainWaiting).padding(.top, 20)
+                Callout(.warn, t.keyNotice(status.keychain)).padding(.top, 20)
             }
             YourLanguagesSection(home: home, primaryAllowed: true, t: t, connect: connect, onChange: { openSetup(.languages) },
                                  onUseCloud: { m.useCloudEngine(m.cloudTarget(hasKey: { status.keys[$0]?.verified ?? false })) })
@@ -64,7 +71,7 @@ struct LanguagesPage: View {
             if st.showsOnMac { onMac.padding(.top, 32) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, Ink.appPaneTop).padding(.horizontal, Ink.appPaneSide).padding(.bottom, Ink.appPaneBottom)
+        .padding(.top, Ink.appPaneTop).padding(.leading, Ink.appPaneSide).padding(.trailing, trailing).padding(.bottom, Ink.appPaneBottom)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 

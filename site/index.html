@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Soyla: dictation for Uzbek, Russian and English</title>
-<meta name="description" content="Push-to-talk dictation for macOS that keeps Uzbek, Russian and English in one sentence. Hold fn, speak, release. Free, open source, your own API key.">
+<meta name="description" content="Push-to-talk dictation for macOS that keeps Uzbek, Russian and English in one sentence. Hold fn, speak, release. Free, open source; English runs on your Mac with no key, Uzbek and Russian use your own API key.">
 <meta name="theme-color" content="#F6F7F9" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#15181D" media="(prefers-color-scheme: dark)">
 <meta property="og:title" content="Soyla: dictation for Uzbek, Russian and English">
@@ -83,7 +83,7 @@ footer a{margin-right:12px;white-space:nowrap}
 <p class="small">Free and open source · macOS 14+ · Apple silicon</p>
 <picture class="shot">
 <source srcset="media/home-dark.png" media="(prefers-color-scheme: dark)">
-<img src="media/home.png" width="1056" height="760" alt="Soyla's Home page: the fn key, your three languages ready, and the last dictation">
+<img src="media/home.png" width="1056" height="700" alt="Soyla's Home page: the fn key, your three languages ready, and the last dictation">
 </picture>
 </section>
 
@@ -91,7 +91,7 @@ footer a{margin-right:12px;white-space:nowrap}
 <h2>Why Soyla</h2>
 <ul class="grid">
 <li class="card"><h3>Code-switching is the point</h3><p>Most dictation apps pick one language per recording. Soyla sends your audio to a general-purpose model with a prompt built for mixed Uzbek, Russian and English speech. On a 41-second clip that switches languages mid-sentence, the default setup kept both scripts in 7 of 7 runs.</p></li>
-<li class="card"><h3>Your key, your data</h3><p>There is no Soyla account and no Soyla server. Audio goes from your Mac straight to the provider you choose, with your own API key. Nothing is sent to the author.</p></li>
+<li class="card"><h3>Your key, your data</h3><p>There is no Soyla account and no Soyla server. English can run entirely on your Mac with Apple's on-device recognition: no key, no audio sent anywhere. Uzbek, Russian and mixed speech go from your Mac straight to the provider you choose, with your own API key. Nothing is sent to the author.</p></li>
 <li class="card"><h3>Built and measured in the open</h3><p>Every dictation is logged locally with a full latency timeline. The replay tool re-sends the same recording to other models, so comparisons use identical audio.</p></li>
 </ul>
 </section>
@@ -109,8 +109,8 @@ footer a{margin-right:12px;white-space:nowrap}
 <h2>Privacy</h2>
 <ul class="plain">
 <li><b>No account.</b> Nothing to sign up for.</li>
-<li><b>No Soyla server.</b> Audio goes from your Mac to the provider you choose.</li>
-<li><b>Your own key.</b> OpenRouter or Google AI Studio, saved in your Mac's Keychain.</li>
+<li><b>No Soyla server.</b> English can stay on your Mac (On this Mac); other audio goes from your Mac to the provider you choose.</li>
+<li><b>Your own key, only where needed.</b> On-device English needs none; Uzbek and Russian use OpenRouter or Google AI Studio, saved in your Mac's Keychain.</li>
 <li><b>No telemetry.</b> Soyla never looks at your screen.</li>
 </ul>
 </section>
@@ -125,7 +125,7 @@ footer a{margin-right:12px;white-space:nowrap}
 <h2>Known limits</h2>
 <ul class="plain">
 <li><b>Not signed by Apple yet,</b> so the first open of each version takes the Open Anyway detour.</li>
-<li><b>Online only.</b> No model runs on the Mac; offline dictations are kept and retried later.</li>
+<li><b>Uzbek, Russian and mixed speech are online only.</b> The free on-device engine is English only; cloud dictations made offline are kept and retried later.</li>
 <li><b>fn is an Apple-keyboard key.</b> On other keyboards pick another hotkey in Settings.</li>
 <li><b>Gemini free tier trains on your audio.</b> Use OpenRouter or a paid key for anything confidential.</li>
 </ul>

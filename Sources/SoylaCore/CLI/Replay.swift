@@ -215,7 +215,9 @@ public enum ReplayCLI {
         }
     }
 
-    // MARK: encode (Encoder, with a WAV fallback while Encoder is a stub)
+    // MARK: encode
+    // The `notImplemented` catches here and in `log` are left from the v0.1 stubs: neither `Encoder.encode` nor
+    // `RunLog.append` throws it any more, so those branches never run.
 
     private static func encode(_ pcm: Data, _ fmt: AudioFormatChoice) throws -> EncodedAudio {
         do { return try Encoder.encode(pcm16: pcm, format: fmt) }

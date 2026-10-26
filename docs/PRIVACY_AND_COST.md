@@ -15,14 +15,14 @@ In this mode there is no correction pass, and no live text, because those need a
 When you finish a dictation, Soyla sends one request to your provider (OpenRouter, Google AI Studio, or your custom server):
 
 - **Your recording** (the audio of that dictation).
-- **A short instruction** telling the model to transcribe, plus your language hint and the names from the **Spelling** box (Settings, Dictation), if you filled it in.
+- **A short instruction** telling the model to transcribe, plus your languages (My languages and Mainly speak) and the names from the **Spelling** box (Settings, Dictation), if you filled it in.
 - **With the Correction pass on:** a second request that sends the recognised **text** (not audio) to be tidied, with your names and terms and the **name of the app** the text is going into (for example "Mail"), so the model can match its tone.
 
 If you use OpenRouter, OpenRouter passes the request on to the company that runs the model (for the default model that is Google). Their privacy terms apply as well; read them if the content is sensitive.
 
 A few other things can leave your Mac:
 
-- **Live text** (off by default; Settings, Pill): while you record, audio is streamed to Google's servers for the preview. It needs a Google AI Studio key. The experimental **Instant results with Live** option (Developer mode, off) uses the same stream.
+- **Live text** (off by default; Settings, Pill): while you record, audio is streamed to Google's servers for the preview. It needs a Google AI Studio key. **Instant results with Live** is on by default only when Google AI Studio is your engine (with OpenRouter or a custom server it stays off unless you turn it on). While you hold the key, the audio goes to Google Live (up to three sessions, one per language, when the language is Auto) so the text can paste about 1.5 s sooner; a press you cancel with Esc has still been heard by Google up to that point. These sessions count against your Google key's quota. To turn it off: Settings, Developer: switch on Developer mode, then **Instant results with Live**.
 - **A backup request (Cloud only):** if your provider has not answered after about 3 seconds (a little longer for long recordings), Soyla sends the same recording a second time and uses whichever answer comes first. Same provider, same data.
 - **Testing a key:** pasting a key sends it to that provider's server once to check it.
 - **Keeping the connection warm:** right before a dictation, and every 25 seconds for 10 minutes after you last used it, Soyla makes a tiny signed-in request to your provider so the next dictation does not wait for a new connection. It carries your key, never audio or text. Turn it off in Settings, Developer: switch on Developer mode, then **Pre-warm connection on key down**.
@@ -71,7 +71,7 @@ Every dictation's text (the original and the corrected version), time, model, le
 
 ## Your keys
 
-Keys are stored in the **macOS Keychain** (readable only on this Mac, after first unlock) and are never written to a text file or the log. To delete one, open Settings, Languages, click **Replace…** next to the key (or its menu arrow), choose **Remove key** and confirm. Your languages stay; Cloud dictation stops until you add a key again.
+Keys are stored in a private file on this Mac, `~/Library/Application Support/Soyla/keys.json`, that only your user account can open (no other user on the Mac can). It is left out of Time Machine backups, never syncs, and keys never appear in the log. Unlike the macOS Keychain, which Soyla used before, the file does not ask before other programs running as you read it; that is the price of no password dialog after every update ([details](SECURITY_MODEL.md#keys)). To delete one, open Settings, Languages, click **Replace…** next to the key (or its menu arrow), choose **Remove key** and confirm. Your languages stay; Cloud dictation stops until you add a key again.
 
 ## Clipboard
 
@@ -94,7 +94,7 @@ What that means for you (estimates from those rates):
 | One 10-second dictation | $0.001 (transcription) to $0.004 (with correction) |
 | One 40-second dictation | $0.005 (transcription), about $0.007 to $0.008 with correction |
 | 50 dictations of about 12 seconds in a day | about $0.15 to $0.20 |
-| A month of that (20 working days), correction pass Off (default) | about $1.50 |
+| A month of that (20 working days), correction pass Raw (default) | about $1.50 |
 | Same month with the correction pass on Light | about $3 to $4 |
 
 Very short dictations (four words or fewer, no numbers) skip the correction pass and cost only the transcription. These are estimates from a small sample, not a quote: model prices change, so check the live price on the OpenRouter model page. Set a **credit limit** on your key ([Keys](KEYS.md)) so a surprise cannot get large.

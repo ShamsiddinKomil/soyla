@@ -36,6 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let settingsModel = SettingsModel()
     private var phraseMenu: NSMenu!
     private var phraseItem: NSMenuItem!
+    private let cleanupMenu = CleanupMenu()          // D26 (c): Raw / Light in the status menu
     private var updateMenuItem: NSMenuItem!
     /// APP-1 (b): the status menu's retitled and hidden-or-shown items; the language the menus were last built in.
     private var menuSlots: [MenuSlot: NSMenuItem] = [:], menuLanguage: UILanguage?
@@ -77,26 +78,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         startRetentionSweep()
         installLastDictationKeys()
         PasteKeycode.prepare()     // main thread: TIS calls trap off-main on macOS 26 (crash 2026-10-16)
-        runsModel.onRetry = { [weak self] r, model in self?.pipeline.retryFromHistory(r, model: model) ?? false }
+        runsModel.onRetry = { [weak self] r, model, language in self?.pipeline.retryFromHistory(r, model: model, language: language) ?? false }
         panelModel.hotkeyLabel = SettingsStore.shared.current.hotkey.shortLabel; panelModel.uiLanguage = SettingsStore.shared.current.uiLanguage
         // One permission poller (AppStatus) for the whole app; the hotkey starts/upgrades from its changes.
         appStatus.lastKeyEventAt = { [weak self] in self?.hotkey?.lastEventAt }
         lastAX = appStatus.permissions.ax; lastIM = appStatus.permissions.inputMonitoring
         permissionSink = appStatus.$permissions.dropFirst().sink { [weak self] p in
-            DispatchQueue.main.async { self?.permissionsChanged(p); self?.refreshIcon() }
+            Task { @MainActor in self?.permissionsChanged(p); self?.refreshIcon() }
         }
         appStatus.start()
         keychainObserver = NotificationCenter.default.addObserver(forName: Secrets.didLoad, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                Log.info("keychain read done: \(Secrets.keychainAccess)")
+                Log.info("keys read done: \(Secrets.keychainAccess)")
                 self.appStatus.refresh(); self.settingsModel.refreshKeyStatus(); self.settingsModel.loadModels()
             }
         }
         startHotkey()
         pipeline.applyWarmMode(SettingsStore.shared.current.micWarmMode)
-        keySink = appStatus.$keys.dropFirst().sink { [weak self] _ in DispatchQueue.main.async { self?.refreshIcon() } }
-        iconSink = panelModel.objectWillChange.sink { [weak self] _ in DispatchQueue.main.async { self?.refreshIcon() } }
+        keySink = appStatus.$keys.dropFirst().sink { [weak self] _ in Task { @MainActor in self?.refreshIcon() } }
+        iconSink = panelModel.objectWillChange.sink { [weak self] _ in Task { @MainActor in self?.refreshIcon() } }
         // First run (or `--onboarding`): the setup window on its own. Otherwise missing permissions → Settings.
         let args = CommandLine.arguments
         // Docs captures: force an appearance (`--appearance dark|light`).
@@ -619,6 +620,7 @@ extension AppDelegate {
         menu.addItem(.separator())
         _ = slot(.open, t.mOpen, #selector(openMainWindow))
         for (k, it) in zip([MenuSlot.paste, .copy], lastDictationItems(t)) { menuSlots[k] = it; menu.addItem(it) }
+        menu.addItem(cleanupMenu.item)
         _ = slot(.settings, t.mSettings, #selector(showSettings), ",")
         menu.addItem(.separator())
         _ = slot(.setup, t.mSetup, #selector(showOnboarding))
@@ -650,6 +652,7 @@ extension AppDelegate {
         let t = AppStrings.for(s.uiLanguage)
         if menuLanguage != s.uiLanguage { menuLanguage = s.uiLanguage; buildMainMenu() }
         phraseItem.isHidden = !s.developerMode
+        cleanupMenu.refresh(s)
         updateMenuItem.isHidden = !Updater.shared.showsButton
         updateMenuItem.title = Updater.shared.buttonTitle(s.uiLanguage) + "…"
         refreshIcon()

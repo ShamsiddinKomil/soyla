@@ -74,7 +74,7 @@ public final class DictationPipeline {
     /// Pre-roll kept in RAM while the engine is warm (nothing to pre-roll when the mic is off).
     nonisolated static let preRollMs = 300
     static let idleCloseSec: Double = 30
-    private var idleCloseWork: DispatchWorkItem?
+    private var idleCloseWork: Task<Void, Never>?     // D10: was a DispatchWorkItem; cancel() before it fires = never runs
     /// Screen lock / display sleep / system sleep: the warm engine is torn down until all of them clear.
     private var suspendReasons = Set<String>()
     private var systemObserversInstalled = false
@@ -159,7 +159,10 @@ public final class DictationPipeline {
         var addr = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDefaultInputDevice,
                                               mScope: kAudioObjectPropertyScopeGlobal,
                                               mElement: kAudioObjectPropertyElementMain)
-        let status = AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &addr, DispatchQueue.main) { [weak self] _, _ in
+        let status = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject), &addr,
+            DispatchQueue.main   // SAFETY (D10, stays): the C API takes a dispatch queue, not an actor; main makes assumeIsolated below true
+        ) { [weak self] _, _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
                 if self.recorder != nil {
@@ -249,19 +252,16 @@ public final class DictationPipeline {
 
     private func scheduleIdleClose() {
         idleCloseWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.idleCloseWork = nil
-                guard self.settings.current.micWarmMode == .idleClose30s, self.warmRecorder != nil else { return }
-                // Still recording/transcribing: try again later rather than leave the mic open for good.
-                guard self.recorder == nil, !self.busy else { self.scheduleIdleClose(); return }
-                if self.warmRecorder != nil { Log.info("mic closed: idle \(Int(Self.idleCloseSec)) s") }
-                self.closeWarm()
-            }
+        let work = Task { [weak self] in
+            guard await MainDelay.elapsed(Self.idleCloseSec), let self else { return }   // cancelled: never runs
+            self.idleCloseWork = nil
+            guard self.settings.current.micWarmMode == .idleClose30s, self.warmRecorder != nil else { return }
+            // Still recording/transcribing: try again later rather than leave the mic open for good.
+            guard self.recorder == nil, !self.busy else { self.scheduleIdleClose(); return }
+            if self.warmRecorder != nil { Log.info("mic closed: idle \(Int(Self.idleCloseSec)) s") }
+            self.closeWarm()
         }
         idleCloseWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.idleCloseSec, execute: work)
     }
 
     /// Every capture ends here (sent, dropped, failed or cancelled): mic off unless it should stay warm.
@@ -513,7 +513,7 @@ public final class DictationPipeline {
         panel.micLive = live
         panel.model = s.sttModel
         panel.phraseId = s.phraseId
-        panel.showLiveText = s.livePreview
+        panel.showLiveText = s.livePreview; panel.languageChip = LanguageSet.chip(s)   // D26(b): hidden for the default set
         panel.showDetails = s.showDetails
         panel.phase = .recording
         onPanelShouldShow?()
@@ -547,8 +547,8 @@ public final class DictationPipeline {
         let tok = noticeToken
         panel.notice = AppStrings.for(panel.uiLanguage).d.pcBusy
         if panel.isProcessing { onPanelShouldShow?() }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
-            MainActor.assumeIsolated { if let self, self.noticeToken == tok { self.panel.notice = nil } }
+        Task { [weak self] in
+            if await MainDelay.elapsed(2.5), let self, self.noticeToken == tok { self.panel.notice = nil }
         }
     }
 
@@ -630,8 +630,8 @@ public final class DictationPipeline {
                 }
             }
             // Re-warm in the background for the next run.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-                guard let self, self.warmRecorder == nil else { return }
+            Task { [weak self] in
+                guard await MainDelay.elapsed(0.1), let self, self.warmRecorder == nil else { return }
                 self.applyWarmMode(s.micWarmMode)
             }
         }
@@ -721,7 +721,7 @@ public final class DictationPipeline {
                     return
                 }
                 await self.transcribeAndFinish(audio: audio, runId: rid, ts: rts, settings: s, gen: gen, captureMeta: capMeta,
-                                               segments: sf.map { ($0, pcm) }, fast: lr.map { ($0, voiced / 1000) })
+                                               segments: sf.map { ($0, pcm) }, fast: lr.map { ($0, voiced / 1000) }, clip: dur > HallucinationGuard.maxDurationS ? nil : ClipStats(pcm: post))
             } catch {
                 await MainActor.run {
                     w?.finishStreamed(); self.afterCapture(r)
@@ -775,15 +775,15 @@ public final class DictationPipeline {
         retryStored(runId: f.runId, ts: f.ts, file: f.file, durationSec: nil, settings: f.settings, copyOnly: false)
     }
 
-    /// History → Retry / Retry with another model: re-send the stored recording and only **copy** the result (never
-    /// paste into whatever is focused now). Updates the same History row. False when busy or the audio is gone.
+    /// History → Retry / Retry with another model / Retry as a language (D26b): re-send the stored recording and only
+    /// **copy** the result (never paste into whatever is focused now). Updates the same History row. False when busy or the audio is gone.
     @discardableResult
-    public func retryFromHistory(_ r: RunRecord, model: String? = nil) -> Bool {
+    public func retryFromHistory(_ r: RunRecord, model: String? = nil, language: String? = nil) -> Bool {
         guard let file = r.audio.file else { return false }
         let url = RecordingStore.resolve(file)
         guard FileManager.default.fileExists(atPath: url.path) else { return false }
-        var s = settings.current
-        if let model { s.sttModel = model }
+        let s = Self.historyRetrySettings(settings.current, model: model,   // D26(b): "Retry as" forces one language
+                                          language: language)
         return retryStored(runId: r.runId, ts: r.ts, file: url, durationSec: r.audio.durationSec, settings: s, copyOnly: true)
     }
 
@@ -804,11 +804,11 @@ public final class DictationPipeline {
         self.runId = runId
         inflight = Task { [weak self] in
             do {
-                let audio = try await Task.detached(priority: .userInitiated) {
-                    try Self.loadStoredAudio(file, format: s.uploadFormat, durationSec: durationSec)
+                let (audio, clip) = try await Task.detached(priority: .userInitiated) {   // pill Retry: guard on stored audio; History retry: none
+                    (try Self.loadStoredAudio(file, format: s.uploadFormat, durationSec: durationSec), copyOnly ? nil : ClipStats.stored(at: file))
                 }.value
                 await self?.transcribeAndFinish(audio: audio, runId: runId, ts: ts, settings: s, gen: gen,
-                                                existingRow: true, copyOnly: copyOnly)
+                                                existingRow: true, copyOnly: copyOnly, clip: clip)
             } catch {
                 await MainActor.run { if let self, gen == self.generation { self.fail(stage: "retry", error, audio: nil) } }
             }
@@ -837,7 +837,7 @@ public final class DictationPipeline {
                                      gen: Int, captureMeta: [String: String] = [:],
                                      existingRow: Bool = false, copyOnly: Bool = false,
                                      segments: (feeder: SegmentFeeder, pcm: Data)? = nil,
-                                     fast: (race: LiveRace, voicedSec: Double)? = nil) async {
+                                     fast: (race: LiveRace, voicedSec: Double)? = nil, clip: ClipStats? = nil) async {
         let s = Self.effectiveSettings(s)   // S3: everything below (record, cleanup, retry) reads the effective copy
         let tl = timeline
         var record = Self.pendingRecord(audio: audio, runId: runId, ts: ts, settings: s)
@@ -850,7 +850,7 @@ public final class DictationPipeline {
 
         do {
             let provider = try self.provider ?? ProviderFactory.transcriber(for: s)
-            var opts = TranscribeOptions(model: s.sttModel, languageHint: s.languageHint)
+            var opts = TranscribeOptions(model: s.sttModel, languageHint: s.languageHint, languages: s.languages)
             opts.vocabulary = s.vocabulary
             // F3 script check (cloud): wrong script → one retry with "Uzbek in Latin script" → still wrong → card, not
             // pasted. Cloud may use pieces / the Live fast path. `.apple`: whole clip on device, D-PUNCT (b), no pieces.
@@ -859,8 +859,8 @@ public final class DictationPipeline {
                 : try await Self.transcript(provider, audio: audio, options: opts, timeline: tl, segments: segments, fast: fast)
             if gen != generation { throw CancellationError() }
             record.rawText = result.text
-            record.usage = result.usage
-            record.providerMeta = result.providerMeta
+            record.usage = result.usage; record.providerMeta = result.providerMeta
+            try HallucinationGuard.check(result.text, clip: clip, meta: &record.providerMeta)   // D26 (a): not pasted
             panel.rawText = result.text
 
             // F3: skip rule, cooldown, guards and the dictionary live in CleanupFlow; any doubt → raw is pasted.
@@ -870,12 +870,10 @@ public final class DictationPipeline {
             }
             let c = await CleanupFlow.run(raw: result.text, level: s.cleanupLevel, cleaner: { try ProviderFactory.cleaner(for: s) },
                                           model: s.cleanupModel, vocabulary: s.vocabulary, appName: targetApp,
-                                          languageHint: s.languageHint, dictionary: ReplacementDictionary(s.dictionary),
+                                          languageHint: s.languageHint, languages: s.languages, dictionary: ReplacementDictionary(s.dictionary),
                                           cooldownKey: cooldownKey, timeline: tl)
             if gen != generation { throw CancellationError() }
-            record.cleanupUsage = c.usage
-            record.providerMeta = (record.providerMeta ?? [:]).merging(c.meta) { _, b in b }
-            if let e = c.error { record.error = e }               // raw text is still pasted; logged only
+            c.apply(to: &record)                                   // usage, meta, error (raw is still pasted), fallback
             if c.text != result.text { record.cleanText = c.text; panel.cleanText = c.text }
             let finalText = c.text
 
@@ -905,6 +903,8 @@ public final class DictationPipeline {
                 panel.failure = .onDeviceHint
                 record.providerMeta = (record.providerMeta ?? [:]).merging(["on_device_hint": "1"]) { _, b in b }
             }
+            let showNote = !copyOnly && panel.failure == nil     // D26 (c): "Pasted as heard", once a day, never over another card
+            if showNote, let note = FallbackNotice.card(for: record.cleanupFallback, live: gen == generation) { panel.failure = note }
             if gen == generation {
                 if copyOnly && panel.failure == nil {
                     // History retry only copies: no "Pasted" (phase .done announces it) and no done sound.
@@ -1072,7 +1072,7 @@ extension DictationPipeline {
         guard let fast else { return try await transcriptGemini(provider, audio: audio, options: options, timeline: tl, segments: segments) }
         let outcome = await fast.race.finish()
         let pieces = await segments?.feeder.transcriber.finishedPrefix()
-        let d = LiveFastDecision.decide(strict: fast.race.strict, live: outcome, pieces: pieces, voicedSec: fast.voicedSec)
+        let d = LiveFastDecision.decide(strict: fast.race.strict, live: outcome, pieces: pieces, voicedSec: fast.voicedSec, languages: options.languages)
         let meta = ["paste_source": d.source.rawValue, "live_reason": d.reason, "live_lang": outcome?.language ?? "-"]
         Log.info("paste source: \(d.source.rawValue) (\(d.reason), \(outcome?.language ?? "-"))")
         if d.source == .live, let outcome {
@@ -1187,7 +1187,7 @@ extension DictationPipeline {
     /// A feeder when the setting is on and a provider exists.
     static func segmentFeeder(_ s: Settings, _ provider: (any TranscriptionProvider)?) -> SegmentFeeder? {
         guard s.streamSegments, let provider else { return nil }
-        var o = TranscribeOptions(model: s.sttModel, languageHint: s.languageHint)
+        var o = TranscribeOptions(model: s.sttModel, languageHint: s.languageHint, languages: s.languages)
         o.vocabulary = s.vocabulary
         return SegmentFeeder(transcriber: SegmentedTranscriber(provider: HedgedProvider.wrap(provider), options: o, minVoicedMs: s.minVoicedMs),
                              config: .app)

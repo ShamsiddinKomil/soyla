@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Home (APP-1, prototype `home()`): the state of things in setup's words, the fn key with a place to try it (or the
-/// missing permissions), your languages with their one fix, and the last dictation. Fits 768 tall without scrolling.
+/// missing permissions), your languages with their one fix, and the last dictation. The everyday state fits 1056 × 688 unscrolled (D23).
 struct HomeView: View {
     @ObservedObject var panel: PanelModel
     @ObservedObject var status: AppStatus
@@ -37,14 +37,15 @@ struct HomeView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 10)
             if home.keychainNotice {
-                Callout(.warn, status.keychain == .denied ? t.keychainDenied : t.keychainWaiting).padding(.top, 20)
+                Callout(.warn, t.keyNotice(status.keychain)).padding(.top, 20)
             }
             Group {
                 if home.hero == .fnKey { hero } else { permissions }
             }
-            .padding(.top, 36)
-            languages.padding(.top, 36)
-            lastDictation.padding(.top, 32)
+            // D23 (owner, 2026-10-26): 24/18/16 and the medium key so the everyday Home fits 1056 × 688 unscrolled (R-06).
+            .padding(.top, 24)
+            languages.padding(.top, 18)
+            lastDictation.padding(.top, 16)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, Ink.appPaneTop).padding(.horizontal, Ink.appPaneSide).padding(.bottom, Ink.appPaneBottom)
@@ -55,7 +56,7 @@ struct HomeView: View {
 
     private var hero: some View {
         HStack(alignment: .center, spacing: 32) {
-            FnKeyCap(label: key, size: .large, pressed: panel.hotkeyHeld, lifted: false)
+            FnKeyCap(label: key, size: .medium, pressed: panel.hotkeyHeld, lifted: false)
             VStack(alignment: .leading, spacing: 12) {
                 TextField(key == "fn" ? t.tryPh : t.tryPh.replacingOccurrences(of: "fn", with: key), text: $tryText, axis: .vertical)
                     .textFieldStyle(.plain)

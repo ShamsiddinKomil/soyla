@@ -262,6 +262,7 @@ final class SetupModel {
     }
     func skipTry() { Log.info("setup: practice skipped"); mutate { $0.skipTry() } }
     func connectLater() { mutate { $0.connectLater() } }
+    func connectFromTry() { mutate { $0.connectFromTry() } }
     func tryCloud() { mutate { $0.tryCloud() } }
     func setUILanguage(_ l: UILanguage) { mutate { $0.uiLanguage = l } }
 
@@ -505,12 +506,18 @@ extension SetupModel {
         return LanguageRoute.route(l, engine: e, engineReady: ready, keyService: flow.connected ? flow.provider.displayName : nil)
     }
 
+    /// English's route has a key (false = setup leaves a hosted engine with none on file; D22).
+    var englishReady: Bool { route(.en).ready }
+    /// The shared answer with what only the model knows: whether English waits for a key (D22).
+    var readiness: Readiness { flow.readiness(englishReady: englishReady) }
+
     /// The primary of Permissions and Try: the step's own Continue, or leave when entered from the app.
     func primary() { if flow.canContinue { next() } else { leave() } }
 
     /// V-09/V-11: entered from the app, Done closes setup even when the step's own condition isn't met.
     func leave() {
-        mutate { $0.leave() }
+        let ready = englishReady
+        mutate { $0.leave(englishReady: ready) }
         if flow.finished { finish() }
     }
 

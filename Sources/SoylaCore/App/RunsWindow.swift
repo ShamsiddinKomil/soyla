@@ -15,7 +15,7 @@ final class RunsModel: ObservableObject {
     /// Short confirmation under the list ("Copied", "Retrying…").
     @Published var status: String?
     /// History → Retry (copy-only) through the pipeline; returns false when busy or the audio is gone. Wired by AppDelegate.
-    var onRetry: ((RunRecord, String?) -> Bool)?
+    var onRetry: ((RunRecord, String?, String?) -> Bool)?   // record, model, forced language (D26b)
     private var sound: NSSound?
     /// The row whose recording is playing (its button reads Stop).
     @Published var playingId: String?
@@ -53,6 +53,10 @@ final class RunsModel: ObservableObject {
 
     func text(_ r: RunRecord) -> String? { showRaw ? (r.rawText ?? r.cleanText) : r.finalText }
 
+    /// D26 (c): the cleaned view marks what cleanup changed against the raw transcript.
+    func diff(_ r: RunRecord) -> AttributedString? { showRaw ? nil : diffs.styled(r) }
+    private var diffs = DiffCache()
+
     func audioURL(_ r: RunRecord) -> URL? {
         guard let f = r.audio.file else { return nil }
         let u = RecordingStore.resolve(f)
@@ -71,10 +75,14 @@ final class RunsModel: ObservableObject {
         if sound?.play() == true { playingId = r.runId }
     }
 
-    func retry(_ r: RunRecord, model: String? = nil) {
+    func retry(_ r: RunRecord, model: String? = nil, language: String? = nil) {
         guard audioURL(r) != nil else { flash(d.fNoRecRetry); return }
-        flash(onRetry?(r, model) == true ? d.fRetrying : d.fBusy)
+        flash(onRetry?(r, model, language) == true ? d.fRetrying : d.fBusy)
     }
+
+    /// D26(b): "Retry as" only where a forced language does something. A retry runs on the current engine (rows store
+    /// no engine), so the rule is the chip's: hidden on the free engine.
+    nonisolated static func showsRetryAs(_ s: Settings) -> Bool { LanguageSet.applies(s) }
 
     /// Models offered by "Retry with another model": the curated chat models plus the current one.
     var retryModels: [String] {
@@ -87,16 +95,16 @@ final class RunsModel: ObservableObject {
         statusToken += 1
         let tok = statusToken
         status = s
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
-            MainActor.assumeIsolated { if self?.statusToken == tok { self?.status = nil } }
+        Task { [weak self] in
+            if await MainDelay.elapsed(2.5), self?.statusToken == tok { self?.status = nil }
         }
     }
 }
 
 /// NSSound's delegate (NSObject) for RunsModel: clears the Stop state when playback ends.
-final class SoundEnd: NSObject, NSSoundDelegate {
+@MainActor final class SoundEnd: NSObject, NSSoundDelegate {
     var onEnd: (() -> Void)?
-    func sound(_ sound: NSSound, didFinishPlaying flag: Bool) { DispatchQueue.main.async { self.onEnd?() } }
+    nonisolated func sound(_ sound: NSSound, didFinishPlaying flag: Bool) { Task { @MainActor in self.onEnd?() } }
 }
 
 extension RunStatus {
@@ -196,7 +204,9 @@ struct RunsView: View {
         VStack(alignment: .leading, spacing: 0) {
             // V-37: the model's name is a developer's detail.
             NoteCard(meta: NoteMeta.line(r, engine: m.developerMode, t: t), status: r.status == .ok ? nil : (r.status.color, t.d.status(r.status)),
-                     text: m.text(r), placeholder: Self.placeholder(r, canRetry: m.audioURL(r) != nil, t: t)) {
+                     text: m.text(r), placeholder: Self.placeholder(r, canRetry: m.audioURL(r) != nil, t: t),
+                     badge: DiffText.badge(r) ? t.hiClean : nil, badgeHelp: t.d.rsBadgeH,
+                     styled: m.diff(r), note: r.cleanupFallback == nil ? nil : t.d.rsSkipped) {
                 HStack(spacing: 2) {
                     if let text = m.text(r), !text.isEmpty { CopyButton(text: text, t: t) }
                     if m.audioURL(r) != nil {
@@ -212,6 +222,7 @@ struct RunsView: View {
                             Section(t.d.hRetryModel) {
                                 ForEach(m.retryModels, id: \.self) { id in Button(ModelNames.name(id)) { m.retry(r, model: id) } }
                             }
+                            if RunsModel.showsRetryAs(SettingsStore.shared.current) { RetryAsMenu(t: t) { m.retry(r, language: $0) } }
                         }
                     }
                 }
@@ -287,5 +298,21 @@ struct RunsView: View {
             if seen[k] == nil { seen[k] = r }
         }
         return seen.values.sorted { $0.model < $1.model }
+    }
+}
+
+/// D26(b): History → Retry's context menu → "Retry as": one language forced, or the saved set. Copies, never pastes.
+private struct RetryAsMenu: View {
+    let t: AppStrings
+    let retry: (String?) -> Void
+    var body: some View {
+        let ls = LanguageSetStrings.for(SettingsStore.shared.current.uiLanguage)   // like RunsModel.d
+        Menu(ls.retryAs) {
+            ForEach(LanguageSet.all, id: \.self) { code in
+                Button(SpokenLanguage(rawValue: code).flatMap { t.n[$0] } ?? code) { retry(code) }
+            }
+            Divider()
+            Button(ls.mine) { retry(nil) }
+        }
     }
 }

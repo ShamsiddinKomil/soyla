@@ -57,6 +57,9 @@ public struct RunRecord: Codable, Sendable, Equatable {
     public var targetApp: String?
     /// F4: pending → ok/failed/cancelled, or interrupted (app died). Old rows infer it (`RunStatus.inferred`).
     public var status: RunStatus
+    /// D26 (c): why the correction pass was skipped after it was asked for and raw was pasted (a `CleanupGuard` raw value,
+    /// or "error"). A class only, never text. nil on old rows and when nothing fell back. Not in the memberwise init.
+    public var cleanupFallback: String?
 
     public init(runId: String, ts: String, source: String, phraseId: Int?, model: String, cleanup: Bool,
                 cleanupModel: String?, languageHint: String?, prewarm: Bool, audio: AudioInfo,
@@ -96,6 +99,7 @@ public struct RunRecord: Codable, Sendable, Equatable {
         targetApp = try c.decodeIfPresent(String.self, forKey: .targetApp)
         status = ((try? c.decodeIfPresent(RunStatus.self, forKey: .status)) ?? nil)
             ?? RunStatus.inferred(error: error, rawText: rawText)
+        cleanupFallback = try c.decodeIfPresent(String.self, forKey: .cleanupFallback)
     }
 
     /// The text the user got: cleaned if there was a correction pass, else raw.

@@ -19,6 +19,7 @@ public actor SegmentedTranscriber {
     private var tasks: [Int: Task<TranscriptResult, Error>] = [:]
     private var hardCutBefore: [Int: Bool] = [:]
     private var texts: [Int: String] = [:]                       // finished pieces, for the next piece's context
+    private var sent = 0                                           // pieces that went to the provider
 
     public init(provider: any TranscriptionProvider, options: TranscribeOptions, format: AudioFormatChoice = .flac,
                 minVoicedMs: Double = 250, useContext: Bool = true) {
@@ -30,11 +31,14 @@ public actor SegmentedTranscriber {
     public func submit(index: Int, pcm: Data, hardCutBefore hard: Bool) {
         hardCutBefore[index] = hard
         // Silence: nothing to send (and the model would invent text or return empty).
+        // The old 0.02 rule on purpose: pieces have no hallucination guard behind them. A quiet clip the capture gate
+        // sent has no piece sent at all, and `finish` then throws `NoPieceSent`, so the caller sends it whole.
         guard Encoder.voicedMs(pcm16: pcm) >= minVoicedMs else {
             texts[index] = ""
             tasks[index] = Task { TranscriptResult(text: "") }
             return
         }
+        sent += 1
         var opts = options
         if useContext, let prev = texts[index - 1], !prev.isEmpty {
             let line = Self.contextLine(prev)
@@ -49,9 +53,10 @@ public actor SegmentedTranscriber {
         }
     }
 
-    /// Waits for every piece in order and joins them. Throws if a piece failed twice.
+    /// Waits for every piece in order and joins them. Throws if a piece failed twice, or `NoPieceSent`.
     public func finish() async throws -> Outcome {
         let order = tasks.keys.sorted()
+        if !order.isEmpty && sent == 0 { throw NoPieceSent() }
         let pending = order.filter { texts[$0] == nil }.count
         var results: [TranscriptResult] = []
         for i in order {
@@ -99,6 +104,11 @@ public actor SegmentedTranscriber {
         return "This audio continues a dictation that so far reads: «\(tail)». Use it only as context: "
             + "transcribe ONLY the new audio and never repeat that text."
     }
+}
+
+/// Every piece was under the 0.02 voice rule, yet the capture gate sent the clip (quiet speech): send it whole.
+public struct NoPieceSent: Error, Sendable {
+    public init() {}
 }
 
 /// Bridges the recorder's audio-thread chunks to a `Segmenter` in order (AsyncStream keeps order; a Task per chunk

@@ -8,8 +8,8 @@
 // usage: node scripts/live_test.mjs <file.wav> [--lang uz-UZ,ru-RU] [--smart] [--vocab "a,b"] [--fast]
 //   --fast  send audio as fast as possible (no real-time pacing) — upper bound, not a dictation simulation
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const args = process.argv.slice(2);
 const file = args.find(a => !a.startsWith("--") && !args[args.indexOf(a) - 1]?.match(/^--(lang|vocab)$/));
@@ -21,7 +21,9 @@ const fast = args.includes("--fast");
 const vad = args.includes("--vad");   // server VAD segments on pauses; key-up sends audioStreamEnd to flush
 if (!file) { console.error("usage: live_test.mjs <file.wav> [--lang uz-UZ,ru-RU] [--smart] [--vocab a,b] [--fast]"); process.exit(2); }
 
-const envPath = path.join(process.env.SOYLA_HOME || path.join(os.homedir(), "projects/soyla"), ".env.local");
+// Default: this script's own repo root (works from any clone or worktree); SOYLA_HOME overrides it.
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const envPath = path.join(process.env.SOYLA_HOME || repoRoot, ".env.local");
 const key = fs.readFileSync(envPath, "utf8").split("\n").find(l => l.startsWith("GEMINI_API_KEY="))?.slice(15).trim();
 if (!key) { console.error("GEMINI_API_KEY missing in " + envPath); process.exit(2); }
 

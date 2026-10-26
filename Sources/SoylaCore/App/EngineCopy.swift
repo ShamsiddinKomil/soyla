@@ -5,12 +5,6 @@ import Foundation
 
 public enum EngineCopy {
     public static let freeTitle = "On this Mac"
-    public static let freeBadge = "Free"
-    public static let freeSubtitle = "Free · English only. Your audio never leaves this Mac."
-    public static let freePrivacy = "Your audio never leaves this Mac. The only network use is Apple's one-time download of its English speech model."
-    public static let cloudTitle = "Cloud"
-    public static let cloudSubtitle = "Your key · Uzbek, Russian, English + mixed speech"
-    public static let cloudNote = "Needed for Uzbek and Russian. Your audio goes to the provider you pick, with your own key."
 
     public enum Tone: Equatable, Sendable { case ok, pending, warn, neutral }
     public enum Action: Equatable, Sendable {

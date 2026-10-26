@@ -64,6 +64,23 @@ public enum Encoder {
         return Double(voiced * 20)
     }
 
+    /// RMS (0…1) of each complete 20 ms frame, the frames `voicedMs` counts.
+    public static func frameRms(pcm16: Data) -> [Double] {
+        let n = PCMSpec.bytesPerSecond / 50 / 2
+        var out: [Double] = []
+        pcm16.withUnsafeBytes { (raw: UnsafeRawBufferPointer) in
+            let samples = raw.bindMemory(to: Int16.self)
+            var i = 0
+            while i + n <= samples.count {
+                var sum = 0.0
+                for j in i..<(i + n) { let v = Double(Int16(littleEndian: samples[j])) / 32768; sum += v * v }
+                out.append((sum / Double(n)).squareRoot())
+                i += n
+            }
+        }
+        return out
+    }
+
     // MARK: WAV
 
     /// Canonical 44-byte RIFF/WAVE header + PCM16 LE data. Odd trailing byte (half sample) is dropped.
@@ -187,6 +204,12 @@ public enum Encoder {
         ffmpegCandidates.first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 
+    /// The ffmpeg child's whole environment: PATH and HOME only (owner D9, 2026-10-25), so no API key, Soyla
+    /// switch or `DYLD_*` variable reaches it.
+    static func ffmpegEnvironment(from env: [String: String]) -> [String: String] {
+        env.filter { $0.key == "PATH" || $0.key == "HOME" }
+    }
+
     private static func oggOpus(pcm16: Data) throws -> Data {
         guard let ffmpeg = ffmpegPath else {
             throw SoylaError.audio("ogg/opus needs ffmpeg at /opt/homebrew/bin/ffmpeg (brew install ffmpeg); not found.")
@@ -195,7 +218,7 @@ public enum Encoder {
         signal(SIGPIPE, SIG_IGN)
         let p = Process()
         p.executableURL = URL(fileURLWithPath: ffmpeg)
-        p.environment = ProcessInfo.processInfo.environment.filter { $0.key != "OPENROUTER_API_KEY" }
+        p.environment = ffmpegEnvironment(from: ProcessInfo.processInfo.environment)
         p.arguments = ["-hide_banner", "-loglevel", "error",
             "-f", "s16le", "-ar", "\(PCMSpec.sampleRate)", "-ac", "\(PCMSpec.channels)", "-i", "-",
             "-c:a", "libopus", "-b:a", "24k", "-f", "ogg", "-",

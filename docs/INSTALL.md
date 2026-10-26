@@ -22,7 +22,17 @@ Soyla is a free Mac app with a window, a Dock icon and a menu-bar icon. It is no
 cd ~/Downloads && shasum -a 256 -c Soyla-vX.Y.Z.zip.sha256
 ```
 
-`Soyla-vX.Y.Z.zip: OK` means the zip is exactly the file that was published.
+`Soyla-vX.Y.Z.zip: OK` means the zip is exactly the file that was published. Each release's notes also print the signing certificate's SHA-256 fingerprint; it is the same for every release, so a different one means the app is not ours ([details](SECURITY_MODEL.md)).
+
+To see the fingerprint of the app you downloaded (after unzipping it in Downloads):
+
+```
+cd ~/Downloads && codesign -d --extract-certificates=/tmp/soyla-cert Soyla.app && shasum -a 256 /tmp/soyla-cert0
+```
+
+The long number it prints must match the one in the release notes.
+
+**Never post your API key** in an issue or anywhere else. Soyla and its author will never ask for it.
 
 ## 2. First open: "Open Anyway" (one time per version)
 
@@ -123,16 +133,16 @@ A build made on your own Mac is not downloaded from the internet, so macOS shows
 1. Click the Soyla icon in the menu bar and choose **Quit Soyla**.
 2. Drag `Soyla.app` from Applications to the Trash.
 3. Optional, to remove your data:
-   - Delete the folder `~/Library/Application Support/Soyla` (in Finder: Go menu, Go to Folder, paste the path).
-   - Open **Keychain Access**, search for `ai.soyla.app` (the Keychain "service" name Soyla uses), and delete the items found.
+   - Delete the folder `~/Library/Application Support/Soyla` (in Finder: Go menu, Go to Folder, paste the path). Your API keys are in it (`keys.json`), so they go too.
+   - Only if you never opened a version that moved keys out of the Keychain: open **Keychain Access**, search for `ai.soyla.app`, and delete the items found.
    - In System Settings, Privacy & Security, remove Soyla from Accessibility and Input Monitoring (select it, click the minus button).
 
-## Homebrew (coming later)
+## Homebrew (from v0.3.0)
 
-A Homebrew cask template lives in [`Casks/soyla.rb`](../Casks/soyla.rb). Once a tap is published the install will be:
+From the v0.3.0 release on, Soyla can also be installed from its own tap (the cask is [`Casks/soyla.rb`](../Casks/soyla.rb)):
 
 ```
-brew install --cask --no-quarantine <owner>/soyla/soyla
+brew install --cask ShamsiddinKomil/soyla/soyla
 ```
 
-`--no-quarantine` skips the Gatekeeper warning, the same effect as section 3. This is not available yet; use sections 1 and 2.
+Homebrew downloads the same zip from this repository's Releases and checks its SHA-256. The first open still needs **Open Anyway** once (section 2), or the command in section 3. Until the v0.3.0 release is out, use sections 1 and 2.

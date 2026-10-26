@@ -26,7 +26,7 @@ git config core.hooksPath scripts/git-hooks   # one-time: pre-commit runs format
 
 ## Rules
 
-- UI follows `docs/DESIGN.md` (tokens `Ink.*`, components in `Sources/SoylaCore/App/DesignKit.swift`): no new colours, fonts or radii outside it; spoken text in the serif; one accent.
+- UI follows `docs/DESIGN.md` (tokens `Ink.*`, components in `Sources/SoylaCore/App/DesignKit.swift`): no new colours, fonts or radii outside it; spoken text on a note card in the system face; one accent.
 
 - **No new dependencies.** SwiftPM stays at zero packages. Dev scripts and tooling may use `ffmpeg`, `gh`, `python3`, `swiftformat` and `swiftlint` (Homebrew dev tools, not dependencies).
 - **Never log dictated text.** `app.log` gets timings and error classes only. Transcripts live in `runs.jsonl` and History.
@@ -58,8 +58,10 @@ git config core.hooksPath scripts/git-hooks   # one-time: pre-commit runs format
    only accepts that signature, and the certificate never leaves the Mac), zips, writes the `.sha256` and publishes
    the release with notes from the CHANGELOG section. `DRY_RUN=1` stops before publishing. The Release workflow on
    the tag only re-runs the checks and proves the tag builds.
-4. First public launch only: `scripts/github_setup.sh` (dry run) then `--apply` creates the repo, topics, labels,
-   Discussions, private vulnerability reporting and Pages. Upload `docs/media/social-preview.png` by hand
+4. First public launch only: `scripts/github_setup.sh` (dry run) then `--apply` creates the private repo, topics, labels
+   and the read-only Actions token default (Discussions stay off). On release day, after switching the repo to public,
+   `scripts/github_setup.sh --public-day --apply` adds the rulesets, fork-PR approval, a one-week interaction limit,
+   private vulnerability reporting and Pages. Upload `docs/media/social-preview.png` by hand
    (Settings → General → Social preview); `swift scripts/make_social.swift` regenerates it.
 5. Release rules: at most one release a week unless it is a hotfix; never reset a user's settings (new fields get
    defaults, saved choices are kept); every release note links the previous version's zip (`scripts/release.sh` adds

@@ -38,7 +38,17 @@ struct AppStrings: Sendable {
     let last, allHist, copy, copied: String
     let today: @Sendable (Int, String) -> String
     let todayEmpty, metaToday: String
-    let failedRun, keychainWaiting, keychainDenied: String    // APP-1 addition
+    let failedRun, keychainWaiting, keychainDenied, keychainPending, keyFileUnreadable: String    // APP-1 addition (D4: the one-time move)
+
+    /// The Home / Languages warning while the launch key read is not `.ready`.
+    func keyNotice(_ a: Secrets.KeychainAccess) -> String {
+        switch a {
+        case .denied: return keychainDenied
+        case .pending: return keychainPending
+        case .unreadable: return keyFileUnreadable
+        case .waiting, .ready: return keychainWaiting
+        }
+    }
 
     // Menu bar
     let mHold, mMicFirst, mWorks: String
@@ -50,7 +60,7 @@ struct AppStrings: Sendable {
     // Languages page (b)
     let eTitle, eSub: String
     let eInfo: [String]
-    let engine, eCloud, eCloudC, eMac, eMacC: String
+    let eCloud, eCloudC, eMac, eMacC: String
     let key, service, gC, oC, notAdded, replace, model, modelC, macModel, macModelC, connected: String
     let keyRemove, keyRejected, keyUnchecked, keyChecking: String   // APP-1 (b) addition
 
@@ -65,16 +75,16 @@ struct AppStrings: Sendable {
     // (c) Privacy & data (prototype `privacy`)
     let pvTitle, pvSub: String
     let pvInfo: [String]
-    let pvWhere, stays, rMac, recs, keep, keepC, keepA, keepI: String
+    let pvWhere, stays, rMac, recs, keep, keepC, keepI: String
     let retNever, ret14, retForever, ret7, retAfterRun: String          // ret7, retAfterRun: APP-1 addition (older values)
-    let folder, finder, mic, warm, warmC, warmA, warmI, warmOff, warm30, warmOn, builtin: String
+    let folder, finder, mic, warm, warmC, warmI, warmOff, warm30, warmOn, builtin: String
     let builtinNow: @Sendable (String) -> String
     let startup, login, loginApproval: String
     let loginFailed: @Sendable (String) -> String                         // APP-1 addition
 
     // (c) Other pages (APP-1 addition: the prototype draws only Home, Languages and Privacy)
     let permSub, pSpeech, pSpeechC: String
-    let dicSub, dEngine, dEngineC, dLang, dLangC, dLangI, langAuto, dClean, dCleanC, dCleanI, cleanOff, cleanLight, dDict: String
+    let dicSub, dLang, dLangC, dLangI, langAuto, dClean, dCleanC, dCleanI, cleanOff, cleanLight, dDict: String
     let hkSub, hkHold, hkHoldI, hkWhere, hkPaste, hkPasteC: String
     let hkMore, hkHeld, hkWorks, hkDoes, hkGHold, hkGHoldC, hkGTwice, hkGTwiceC: String   // HOTKEY-1
     let hkTest: @Sendable (String) -> String
@@ -88,7 +98,7 @@ struct AppStrings: Sendable {
     let hiCount: @Sendable (Int, Int) -> String
 
     // v3: the inline Connect panel (prototype-v3 `cx*`)
-    let cxChecking, cxFail, cxCancel, cxBoth: String
+    let cxFail, cxCancel, cxBoth: String
     let cxPriv: @Sendable (String) -> String
 
     // Audit 2026-10-19 additions: a row waiting for permissions (V-01), the pill's key card (V-10). Uzbek and Russian
@@ -101,6 +111,8 @@ struct AppStrings: Sendable {
     let keyRemoveStops: @Sendable (CloudCombo) -> String
     let dRepl, dReplC, dAdd, dSpell, dSpellC, devMode, devModeC, devModeI: String   // V-15, V-16
     let pillKey: @Sendable (CloudCombo) -> String
+    /// R-11 (D24): what VoiceOver says for an ⓘ next to `x` ("About Languages", not "Languages").
+    let about: @Sendable (String) -> String
 
     /// (d) The remaining words: dictionary, History cards, pill, Report a Problem, updates, custom endpoint, engine status.
     let d: AppDStrings
@@ -177,8 +189,10 @@ extension AppStrings {
             today: { "Today: \($0) · usually \($1) s" },
             todayEmpty: "Nothing yet. Your first sentence will appear here.", metaToday: "Today",
             failedRun: "This one didn’t go through. Retry it from History.",
-            keychainWaiting: "macOS is asking for your Mac password so this new version of Soyla can read your saved API key. Type it and click Always Allow. This happens once after each update.",
-            keychainDenied: "macOS didn’t let this version of Soyla read your saved API key. Quit and reopen Soyla, then type your Mac password and click Always Allow.",
+            keychainWaiting: "Soyla now keeps your API key in a private file on this Mac. macOS is asking for your Mac password one last time so Soyla can move the key out of the Keychain. Type it and click Allow.",
+            keychainDenied: "macOS didn’t let Soyla move your saved API key out of the Keychain. Quit and reopen Soyla, then type your Mac password and click Allow.",
+            keychainPending: "Soyla couldn’t open the Keychain to move your saved API key. Quit and reopen Soyla to try again.",
+            keyFileUnreadable: "Soyla can’t read its saved keys file. Connect your API key again.",
             mHold: "Hold {key} in any app", mMicFirst: "Allow the microphone first.", mWorks: "English works now.",
             mConnect: { "Connect \(subj[$0] ?? "")…" }, mMic: "Allow the Microphone…", mOpen: "Open Soyla",
             mPaste: "Paste Last Dictation", mCopyLast: "Copy Last Dictation", mSettings: "Settings…", mSetup: "Setup Assistant…",
@@ -190,7 +204,7 @@ extension AppStrings {
             eInfo: ["English can run on this Mac with Apple’s speech model: free, offline, nothing leaves the Mac.",
                     "Uzbek, Russian and mixed speech use the Cloud service you pick, with your own API key. Audio goes from this Mac straight to that service. There is no Soyla server.",
                     "With Cloud on, English goes through the same service."],
-            engine: "Engine", eCloud: "Cloud", eCloudC: "All languages, mixed sentences", eMac: "On this Mac", eMacC: "English only · free, offline",
+            eCloud: "Cloud", eCloudC: "All languages, mixed sentences", eMac: "On this Mac", eMacC: "English only · free, offline",
             key: "API key", service: "Service", gC: "Free to start", oC: "Pay as you go", notAdded: "Not added", replace: "Replace…",
             model: "Model", modelC: "Flash-Lite: faster, less exact", macModel: "English speech model", macModelC: "Apple · offline",
             connected: "Connected",
@@ -204,23 +218,21 @@ extension AppStrings {
             pvInfo: ["Soyla has no account and no server. Text and recordings are saved only on this Mac.",
                      "Cloud services receive only the audio of a dictation, with your API key."],
             pvWhere: "Where your voice goes", stays: "Stays on this Mac", rMac: "This Mac", recs: "Recordings",
-            keep: "Keep recordings", keepC: "Text stays in History", keepA: "About keeping recordings",
+            keep: "Keep recordings", keepC: "Text stays in History",
             keepI: "Recordings let you retry a dictation. A failed dictation keeps its recording until you retry or remove it.",
             retNever: "Don’t keep", ret14: "14 days", retForever: "Forever", ret7: "7 days", retAfterRun: "Until it’s pasted",
             folder: "Data folder", finder: "Show in Finder", mic: "Microphone", warm: "Keep the microphone on", warmC: "Faster start",
-            warmA: "About keeping the microphone on",
             warmI: "The mic light stays on while it’s open. Off: the mic opens only while you hold the key, about 0.3 s after you press. It always closes when the screen locks or the Mac sleeps.",
             warmOff: "Off between dictations", warm30: "For 30 s after a dictation", warmOn: "Always",
             builtin: "Prefer the built-in microphone", builtinNow: { "Now: \($0)" },
             startup: "Startup", login: "Open Soyla at login", loginApproval: "Approve it in System Settings → General → Login Items.",
             loginFailed: { "Couldn’t change the login item: \($0)" },
             permSub: "What macOS lets Soyla do.", pSpeech: "Recognize English on this Mac", pSpeechC: "Speech Recognition",
-            dicSub: "How your words are written.", dEngine: "Engine", dEngineC: "On this Mac · English",
-            dLang: "Mainly speak", dLangC: "Auto handles mixed speech",
+            dicSub: "How your words are written.", dLang: "Mainly speak", dLangC: "Auto handles mixed speech",
             dLangI: "Auto-detect handles mixed sentences. Pick one language only if Soyla keeps guessing wrong.", langAuto: "Auto-detect",
             dClean: "Correction pass", dCleanC: "Removes fillers and repeats",
-            dCleanI: "Light removes repeats and fillers and applies self-corrections (about 1.8 s extra). Off pastes the text as heard. The original is always kept in History.",
-            cleanOff: "Off", cleanLight: "Light", dDict: "Personal dictionary",
+            dCleanI: "Light removes repeats and fillers and applies self-corrections (about 1.8 s extra). Raw pastes the text as heard. The original is always kept in History.",
+            cleanOff: "Raw", cleanLight: "Light", dDict: "Personal dictionary",
             hkSub: "The key you hold to talk.", hkHold: "Hold to talk",
             hkHoldI: "For fn: set System Settings → Keyboard → “Press 🌐 key to” → Do Nothing, and quit other dictation apps.",
             hkWhere: "Where the text goes", hkPaste: "Paste into the app", hkPasteC: "Off: copy only", hkMore: "More keys", hkHeld: "Now let go", hkWorks: "Works", hkDoes: "What it does",
@@ -245,7 +257,7 @@ extension AppStrings {
             hiSub: "Every dictation, newest first.", hiSearch: "Search", hiClean: "Cleaned", hiRaw: "Raw",
             hiEmpty: "Hold {key} in any app. Your words appear here.", hiNoMatch: "No matches.", hiKeys: "Paste last ⌃⌘V · Copy last ⌃⌘C",
             hiCount: { "\($0) of \($1)" },
-            cxChecking: "Checking…", cxFail: "That key didn’t work. Check it and try again.", cxCancel: "Cancel",
+            cxFail: "That key didn’t work. Check it and try again.", cxCancel: "Cancel",
             cxBoth: "One key covers Uzbek and Russian.", cxPriv: { "Audio goes straight to \($0)." },
             waitPerms: "Waiting for permissions", pillKeyHint: "English works without one.", pFnSet: "Set", attention: "Needs attention", pcNoSound: "No sound from the mic",
             keyRemoveQ: "Remove the API key?", keyRemoveCloud: "Dictation through Cloud stops until you add a key.",
@@ -254,7 +266,7 @@ extension AppStrings {
             dRepl: "Replacements", dReplC: "Heard → written", dAdd: "Add…", dSpell: "Spelling", dSpellC: "Names, one per line",
             devMode: "Developer mode", devModeC: "Timings in History",
             devModeI: "Shows timings and run tags in History, and the lab controls below. Nothing here is needed for everyday use.",
-            pillKey: { "\(subj[$0] ?? "") \($0 == .uzru ? "need" : "needs") an API key" }, d: .en)
+            pillKey: { "\(subj[$0] ?? "") \($0 == .uzru ? "need" : "needs") an API key" }, about: { "About \($0)" }, d: .en)
     }()
 
     static let uz: AppStrings = {
@@ -269,7 +281,7 @@ extension AppStrings {
             more: { "\(AppStrings.cap1(subj[$0] ?? "")) uchun yana bir qadam" }, moreSub: "Ingliz tili hozir ishlaydi.",
             micOff: "Soyla hali sizni eshitmayapti", micOffSub: "Mikrofonga ruxsat bering, so‘ng {key}’ni bosib turing.",
             axOff: "Soyla hali siz uchun yoza olmaydi", axOffSub: "Accessibility’ga ruxsat bering, so‘ng {key}’ni bosib turing.",
-            keyTitle: "Soyla’ga API key kerak", needsKeySub: "API key qo‘shing, so‘ng {key}’ni bosib turing.",
+            keyTitle: "Soyla’ga API\u{00A0}key kerak", needsKeySub: "API key qo‘shing, so‘ng {key}’ni bosib turing.",
             tryPh: "Shu yerni bosing, fn’ni bosib turib gapiring", handsFree: "Ushlab turmasdan", cancel: "Bekor qilish",
             tShort: "Biroz uzoqroq bosib turing.",
             listening: "Tinglayapman…", writing: "Yozyapman…", secs: "s", onMacLow: "shu Mac’da", via: { "\($0) orqali" },
@@ -281,8 +293,10 @@ extension AppStrings {
             today: { "Bugun: \($0) ta · odatda \($1) s" },
             todayEmpty: "Hozircha hech narsa yo‘q. Birinchi gapingiz shu yerda chiqadi.", metaToday: "Bugun",
             failedRun: "Bu diktovka o‘tmadi. Uni Tarixdan qayta yuboring.",
-            keychainWaiting: "Soyla’ning yangi versiyasi saqlangan API key’ingizni o‘qishi uchun macOS Mac parolingizni so‘rayapti. Parolni kiriting va Always Allow’ni bosing. Bu har bir yangilanishdan keyin bir marta bo‘ladi.",
-            keychainDenied: "macOS Soyla’ning bu versiyasiga saqlangan API key’ni o‘qishga ruxsat bermadi. Soyla’dan chiqib, uni qayta oching, so‘ng Mac parolingizni kiriting va Always Allow’ni bosing.",
+            keychainWaiting: "Soyla endi API key’ingizni shu Mac’dagi shaxsiy faylda saqlaydi. API key’ni Keychain’dan ko‘chirish uchun macOS oxirgi marta Mac parolingizni so‘rayapti. Parolni kiriting va Allow’ni bosing.",
+            keychainDenied: "macOS Soyla’ga saqlangan API key’ni Keychain’dan ko‘chirishga ruxsat bermadi. Soyla’dan chiqib, uni qayta oching, so‘ng Mac parolingizni kiriting va Allow’ni bosing.",
+            keychainPending: "Soyla saqlangan API key’ni ko‘chirish uchun Keychain’ni ocha olmadi. Qayta urinish uchun Soyla’dan chiqib, uni qayta oching.",
+            keyFileUnreadable: "Soyla saqlangan API key’lar faylini o‘qiy olmayapti. API key’ni qayta ulang.",
             mHold: "Istalgan ilovada {key}’ni bosib turing", mMicFirst: "Avval mikrofonga ruxsat bering.", mWorks: "Ingliz tili hozir ishlaydi.",
             mConnect: { "\(AppStrings.cap1(subj[$0] ?? "")) uchun API key ulash…" }, mMic: "Mikrofonga ruxsat berish…",
             mOpen: "Soyla’ni ochish", mPaste: "Oxirgi diktovkani qo‘yish", mCopyLast: "Oxirgi diktovkadan nusxa olish",
@@ -294,7 +308,7 @@ extension AppStrings {
             eInfo: ["Ingliz tili shu Mac’da Apple’ning nutq modeli bilan ishlay oladi: bepul, internetsiz, hech narsa Mac’dan chiqmaydi.",
                     "O‘zbek, rus va aralash nutq siz tanlagan Cloud xizmatida o‘z API key’ingiz bilan ishlaydi. Ovoz shu Mac’dan to‘g‘ridan-to‘g‘ri o‘sha xizmatga boradi. Soyla serveri yo‘q.",
                     "Cloud yoqilganda ingliz tili ham o‘sha xizmat orqali ishlaydi."],
-            engine: "Qayerda ishlaydi", eCloud: "Cloud", eCloudC: "Barcha tillar, aralash gaplar", eMac: "Shu Mac’da",
+            eCloud: "Cloud", eCloudC: "Barcha tillar, aralash gaplar", eMac: "Shu Mac’da",
             eMacC: "Faqat ingliz tili · bepul, internetsiz",
             key: "API key", service: "Xizmat", gC: "Boshlash bepul", oC: "Ishlatganingizga yarasha to‘lov", notAdded: "Qo‘shilmagan", replace: "Almashtirish…",
             model: "Model", modelC: "Flash-Lite: tezroq, aniqligi pastroq", macModel: "Ingliz tili nutq modeli", macModelC: "Apple · internetsiz",
@@ -309,11 +323,11 @@ extension AppStrings {
             pvInfo: ["Soyla’da hisob ham, server ham yo‘q. Matn va yozuvlar faqat shu Mac’da saqlanadi.",
                      "Cloud xizmatlari faqat diktovka ovozini, API key’ingiz bilan oladi."],
             pvWhere: "Ovozingiz qayerga boradi", stays: "Shu Mac’da qoladi", rMac: "Shu Mac", recs: "Yozuvlar",
-            keep: "Yozuvlarni saqlash", keepC: "Matn Tarixda qoladi", keepA: "Yozuvlarni saqlash haqida",
+            keep: "Yozuvlarni saqlash", keepC: "Matn Tarixda qoladi",
             keepI: "Yozuv diktovkani qayta yuborishga imkon beradi. Muvaffaqiyatsiz diktovka yozuvi qayta yuborguningizcha yoki o‘chirguningizcha saqlanadi.",
             retNever: "Saqlamaslik", ret14: "14 kun", retForever: "Doim", ret7: "7 kun", retAfterRun: "Qo‘yilguncha",
             folder: "Ma’lumotlar papkasi", finder: "Finder’da ko‘rsatish", mic: "Mikrofon", warm: "Mikrofonni yoqiq qoldirish",
-            warmC: "Tezroq boshlanadi", warmA: "Mikrofonni yoqiq qoldirish haqida",
+            warmC: "Tezroq boshlanadi",
             warmI: "Mikrofon ochiq turganda uning chirog‘i yonib turadi. O‘chiq: mikrofon faqat tugmani bosib turganingizda, bosgandan taxminan 0,3 s keyin ochiladi. Ekran qulflanganda yoki Mac uxlaganda doim yopiladi.",
             warmOff: "Diktovkalar orasida o‘chiq", warm30: "Diktovkadan keyin 30 s", warmOn: "Doim",
             builtin: "Ichki mikrofonni afzal ko‘rish", builtinNow: { "Hozir: \($0)" },
@@ -321,12 +335,11 @@ extension AppStrings {
             loginApproval: "System Settings → General → Login Items’da tasdiqlang.",
             loginFailed: { "Ishga tushirish sozlamasini o‘zgartirib bo‘lmadi: \($0)" },
             permSub: "macOS Soyla’ga nimalarga ruxsat beradi.", pSpeech: "Ingliz tilini shu Mac’da tanish", pSpeechC: "Speech Recognition",
-            dicSub: "So‘zlaringiz qanday yoziladi.", dEngine: "Qayerda ishlaydi", dEngineC: "Shu Mac’da · ingliz tili",
-            dLang: "Asosan qaysi tilda", dLangC: "Avto aralash nutqni tushunadi",
+            dicSub: "So‘zlaringiz qanday yoziladi.", dLang: "Asosan qaysi tilda", dLangC: "Avto aralash nutqni tushunadi",
             dLangI: "Avtoaniqlash aralash gaplarni tushunadi. Soyla tez-tez adashsa, bitta tilni tanlang.", langAuto: "Avtoaniqlash",
             dClean: "Tuzatish", dCleanC: "Ortiqcha so‘zlarni olib tashlaydi",
-            dCleanI: "Yengil: takror va ortiqcha so‘zlarni olib tashlaydi, o‘z-o‘zini tuzatishlarni qo‘llaydi (taxminan 1,8 s qo‘shimcha). O‘chiq: matn eshitilganicha qo‘yiladi. Asl matn doim Tarixda saqlanadi.",
-            cleanOff: "O‘chiq", cleanLight: "Yengil", dDict: "Shaxsiy lug‘at",
+            dCleanI: "Yengil: takror va ortiqcha so‘zlarni olib tashlaydi, o‘z-o‘zini tuzatishlarni qo‘llaydi (taxminan 1,8 s qo‘shimcha). Asl matn: matn eshitilganicha qo‘yiladi. Asl matn doim Tarixda saqlanadi.",
+            cleanOff: "Asl matn", cleanLight: "Yengil", dDict: "Shaxsiy lug‘at",
             hkSub: "Gapirish uchun bosib turiladigan tugma.", hkHold: "Bosib turib gapirish",
             hkHoldI: "fn uchun: System Settings → Keyboard → “Press 🌐 key to” → Do Nothing’ni tanlang va boshqa diktovka ilovalarini yoping.",
             hkWhere: "Matn qayerga boradi", hkPaste: "Ilovaga qo‘yish", hkPasteC: "O‘chiq: faqat nusxa", hkMore: "Boshqa tugmalar", hkHeld: "Endi qo‘yib yuboring", hkWorks: "Ishlayapti", hkDoes: "Nima qiladi",
@@ -351,7 +364,7 @@ extension AppStrings {
             hiSub: "Barcha diktovkalar, yangilari birinchi.", hiSearch: "Qidirish", hiClean: "Tuzatilgan", hiRaw: "Asl matn",
             hiEmpty: "Istalgan ilovada {key}’ni bosib turing. So‘zlaringiz shu yerda chiqadi.", hiNoMatch: "Hech narsa topilmadi.", hiKeys: "Oxirgini qo‘yish ⌃⌘V · Nusxa olish ⌃⌘C",
             hiCount: { "\($1) tadan \($0) ta" },
-            cxChecking: "Tekshirilmoqda…", cxFail: "Bu API key ishlamadi. Tekshirib, qayta urinib ko‘ring.", cxCancel: "Bekor qilish",
+            cxFail: "Bu API key ishlamadi. Tekshirib, qayta urinib ko‘ring.", cxCancel: "Bekor qilish",
             cxBoth: "Bitta API key o‘zbek va rus tili uchun ishlaydi.", cxPriv: { "Ovoz to‘g‘ridan-to‘g‘ri \($0)’ga boradi." },
             waitPerms: "Ruxsat kutilmoqda", pillKeyHint: "Ingliz tili usiz ishlaydi.", pFnSet: "Sozlangan", attention: "E’tibor kerak", pcNoSound: "Mikrofondan ovoz kelmayapti",
             keyRemoveQ: "API key o‘chirilsinmi?", keyRemoveCloud: "API key qo‘shmaguningizcha Cloud orqali diktovka to‘xtaydi.",
@@ -360,7 +373,7 @@ extension AppStrings {
             dRepl: "Almashtirishlar", dReplC: "Eshitilgan → yoziladi", dAdd: "Qo‘shish…", dSpell: "Imlo", dSpellC: "Ismlar, har qatorda bittadan",
             devMode: "Dasturchi rejimi", devModeC: "Tarixda vaqtlar",
             devModeI: "Tarixda vaqtlar va yozuv belgilarini, pastda esa sinov sozlamalarini ko‘rsatadi. Kundalik ishlatish uchun bularning hech biri kerak emas.",
-            pillKey: { "\(AppStrings.cap1(subj[$0] ?? "")) uchun API key kerak" }, d: .uz)
+            pillKey: { "\(AppStrings.cap1(subj[$0] ?? "")) uchun API key kerak" }, about: { "\($0) haqida" }, d: .uz)
     }()
 
     static let ru: AppStrings = {
@@ -387,8 +400,10 @@ extension AppStrings {
             today: { "Сегодня: \($0) · обычно \($1) с" },
             todayEmpty: "Пока пусто. Здесь появится ваша первая фраза.", metaToday: "Сегодня",
             failedRun: "Эта диктовка не прошла. Повторите её из Истории.",
-            keychainWaiting: "macOS просит пароль Mac, чтобы новая версия Soyla прочитала сохранённый API-ключ. Введите его и нажмите Always Allow. Так бывает один раз после каждого обновления.",
-            keychainDenied: "macOS не дала этой версии Soyla прочитать сохранённый API-ключ. Завершите и снова откройте Soyla, затем введите пароль Mac и нажмите Always Allow.",
+            keychainWaiting: "Теперь Soyla хранит API-ключ в личном файле на этом Mac. macOS в последний раз просит пароль Mac, чтобы Soyla перенесла ключ из Keychain. Введите его и нажмите Allow.",
+            keychainDenied: "macOS не дала Soyla перенести сохранённый API-ключ из Keychain. Завершите и снова откройте Soyla, затем введите пароль Mac и нажмите Allow.",
+            keychainPending: "Soyla не смогла открыть Keychain, чтобы перенести сохранённый API-ключ. Завершите и снова откройте Soyla, чтобы попробовать ещё раз.",
+            keyFileUnreadable: "Soyla не может прочитать файл с сохранёнными ключами. Подключите API-ключ заново.",
             mHold: "Зажмите {key} в любом приложении", mMicFirst: "Сначала разрешите доступ к микрофону.", mWorks: "Английский уже работает.",
             mConnect: { "Подключить \(acc[$0] ?? "")…" }, mMic: "Разрешить доступ к микрофону…", mOpen: "Открыть Soyla",
             mPaste: "Вставить последнюю диктовку", mCopyLast: "Скопировать последнюю диктовку", mSettings: "Настройки…",
@@ -400,7 +415,7 @@ extension AppStrings {
             eInfo: ["Английский может работать на этом Mac через речевую модель Apple: бесплатно, без интернета, ничего не покидает Mac.",
                     "Узбекский, русский и смешанная речь идут в выбранный облачный сервис с вашим API-ключом. Звук идёт с этого Mac прямо в сервис. Серверов Soyla нет.",
                     "Когда включено облако, английский идёт через тот же сервис."],
-            engine: "Где работает", eCloud: "Облако", eCloudC: "Все языки, смешанные фразы", eMac: "На этом Mac",
+            eCloud: "Облако", eCloudC: "Все языки, смешанные фразы", eMac: "На этом Mac",
             eMacC: "Только английский · бесплатно, без интернета",
             key: "API-ключ", service: "Сервис", gC: "Бесплатно для начала", oC: "Оплата по факту", notAdded: "Не добавлен", replace: "Заменить…",
             model: "Модель", modelC: "Flash-Lite: быстрее, менее точная", macModel: "Английская речевая модель", macModelC: "Apple · без интернета",
@@ -415,23 +430,21 @@ extension AppStrings {
             pvInfo: ["У Soyla нет аккаунта и сервера. Текст и записи хранятся только на этом Mac.",
                      "Облачный сервис получает только звук диктовки, с вашим API-ключом."],
             pvWhere: "Куда идёт ваш голос", stays: "Остаётся на этом Mac", rMac: "Этот Mac", recs: "Записи",
-            keep: "Хранить записи", keepC: "Текст остаётся в Истории", keepA: "О хранении записей",
+            keep: "Хранить записи", keepC: "Текст остаётся в Истории",
             keepI: "Запись позволяет повторить диктовку. Запись неудачной диктовки хранится, пока вы её не повторите или не удалите.",
             retNever: "Не хранить", ret14: "14 дней", retForever: "Всегда", ret7: "7 дней", retAfterRun: "До вставки",
             folder: "Папка данных", finder: "Показать в Finder", mic: "Микрофон", warm: "Держать микрофон включённым", warmC: "Быстрый запуск",
-            warmA: "О включённом микрофоне",
             warmI: "Пока микрофон открыт, горит его индикатор. Выключен: микрофон открывается, только пока вы держите клавишу, примерно через 0,3 с после нажатия. При блокировке экрана и сне Mac он всегда закрывается.",
             warmOff: "Выключен между диктовками", warm30: "30 с после диктовки", warmOn: "Всегда",
             builtin: "Предпочитать встроенный микрофон", builtinNow: { "Сейчас: \($0)" },
             startup: "Запуск", login: "Открывать Soyla при входе", loginApproval: "Подтвердите в System Settings → General → Login Items.",
             loginFailed: { "Не удалось изменить объект входа: \($0)" },
             permSub: "Что macOS разрешает Soyla.", pSpeech: "Распознавать английский на этом Mac", pSpeechC: "Speech Recognition",
-            dicSub: "Как записываются ваши слова.", dEngine: "Где работает", dEngineC: "На этом Mac · английский",
-            dLang: "В основном говорю", dLangC: "Авто понимает смешанную речь",
+            dicSub: "Как записываются ваши слова.", dLang: "В основном говорю", dLangC: "Авто понимает смешанную речь",
             dLangI: "Автоопределение понимает смешанные фразы. Выберите один язык, только если Soyla часто ошибается.", langAuto: "Автоопределение",
             dClean: "Коррекция", dCleanC: "Убирает лишние слова",
-            dCleanI: "Лёгкая убирает повторы и слова-паразиты и применяет самоисправления (примерно +1,8 с). Выключена: текст вставляется как услышан. Оригинал всегда остаётся в Истории.",
-            cleanOff: "Выключена", cleanLight: "Лёгкая", dDict: "Личный словарь",
+            dCleanI: "Лёгкая убирает повторы и слова-паразиты и применяет самоисправления (примерно +1,8 с). Исходный: текст вставляется как услышан. Оригинал всегда остаётся в Истории.",
+            cleanOff: "Исходный", cleanLight: "Лёгкая", dDict: "Личный словарь",
             hkSub: "Клавиша, которую вы держите.", hkHold: "Зажать и говорить",
             hkHoldI: "Для fn: System Settings → Keyboard → «Press 🌐 key to» → Do Nothing, и закройте другие приложения диктовки.",
             hkWhere: "Куда идёт текст", hkPaste: "Вставлять в приложение", hkPasteC: "Выключено: только копия", hkMore: "Другие клавиши", hkHeld: "Теперь отпустите", hkWorks: "Работает", hkDoes: "Что делает",
@@ -456,7 +469,7 @@ extension AppStrings {
             hiSub: "Все диктовки, новые сверху.", hiSearch: "Поиск", hiClean: "Исправленный", hiRaw: "Исходный",
             hiEmpty: "Зажмите {key} в любом приложении. Слова появятся здесь.", hiNoMatch: "Ничего не найдено.", hiKeys: "Вставить последнюю ⌃⌘V · Копировать ⌃⌘C",
             hiCount: { "\($0) из \($1)" },
-            cxChecking: "Проверяю…", cxFail: "Ключ не подошёл. Проверьте его и попробуйте снова.", cxCancel: "Отмена",
+            cxFail: "Ключ не подошёл. Проверьте его и попробуйте снова.", cxCancel: "Отмена",
             cxBoth: "Один ключ работает для узбекского и русского.", cxPriv: { "Звук идёт напрямую в \($0)." },
             waitPerms: "Ждёт разрешений", pillKeyHint: "Английский работает и без него.", pFnSet: "Настроено", attention: "Требует внимания", pcNoSound: "Нет звука с микрофона",
             keyRemoveQ: "Удалить API-ключ?", keyRemoveCloud: "Диктовка через облако остановится, пока вы не добавите ключ.",
@@ -465,6 +478,6 @@ extension AppStrings {
             dRepl: "Замены", dReplC: "Услышано → пишется", dAdd: "Добавить…", dSpell: "Написание", dSpellC: "Имена, по одному в строке",
             devMode: "Режим разработчика", devModeC: "Замеры в Истории",
             devModeI: "Показывает замеры и метки записей в Истории и настройки для тестов ниже. Для повседневной работы ничего из этого не нужно.",
-            pillKey: { "Для \(gen[$0] ?? "") нужен API-ключ" }, d: .ru)
+            pillKey: { "Для \(gen[$0] ?? "") нужен API-ключ" }, about: { "Подробнее: \($0)" }, d: .ru)
     }()
 }

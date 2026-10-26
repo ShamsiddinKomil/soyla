@@ -93,6 +93,8 @@ private struct LanguagesPane: View {
     @ViewBuilder private var status: some View {
         let t = model.strings, f = model.flow
         if f.languages.isEmpty { SetupStatus(text: t.lNone) }
+        // D22 / R-04: English waits for the key too, so the line names Soyla, not only the cloud languages.
+        else if f.englishWaits(englishReady: model.englishReady) { SetupStatus(color: Ink.warn, text: AppStrings.for(f.uiLanguage).keyTitle) }
         else if let c = f.cloudCombo { SetupStatus(color: Ink.warn, text: t.lCloud(c)) }
         else if case .cloud(let name) = model.route(.en).place { SetupStatus(color: Ink.ok, text: t.lEnVia(name ?? "Cloud")) }
         else { SetupStatus(color: Ink.ok, text: t.lEn) }
@@ -200,11 +202,13 @@ private struct ConnectPane: View {
 
     var body: some View {
         let t = model.strings, f = model.flow
-        PaneScaffold(title: t.cTitle(f.cloudCombo ?? .uz), info: (t.cInfo, t.cTip), sub: Text(t.cSub)) {
+        // D22 / R-04: when English waits for the key too, the title is Home's own ("Soyla needs an API key").
+        let title = f.englishWaits(englishReady: model.englishReady) ? AppStrings.for(f.uiLanguage).keyTitle : t.cTitle(f.cloudCombo ?? .uz)
+        PaneScaffold(title: title, info: (t.cInfo, t.cTip), sub: Text(t.cSub)) {
             VStack(alignment: .leading, spacing: SetupScale.pt(16)) {
                 SetupGroup {
-                    providerRow(.google, caption: t.cG, divider: true)
-                    providerRow(.openRouter, caption: t.cO, divider: false)
+                    providerRow(.openRouter, caption: t.cO, divider: true)
+                    providerRow(.google, caption: t.cG, divider: false)
                 }
                 .accessibilityElement(children: .contain)
                 // Regression pass 2026-10-20: the tiles are the service choice ("Service", as in inline Connect);
@@ -322,14 +326,14 @@ private struct TryPane: View {
     var body: some View {
         let t = model.strings, f = model.flow, lang = f.tryLanguage
         PaneScaffold(title: t.tTitle, sub: setupKeyLine(t.tSub, key: model.hotkeyLabel)) {
-            if f.readiness.isBlocked { blocked } else { practice }
+            if f.readiness.isBlocked { blocked } else if f.tryWaitsForKey(englishReady: model.englishReady) { keyNudge } else { practice }
         } footer: {
             BackButton(model: model)
             if f.currentTry == nil && f.returnTo == nil && !f.readiness.isBlocked { LinkButton(title: t.skip) { model.skipTry() } }
             Spacer()
             Button(f.fromApp ? t.close : t.finish) { model.primary() }
                 .buttonStyle(.borderedProminent).tint(Ink.lazur).keyboardShortcut(.defaultAction)
-                .disabled(!f.primaryEnabled)
+                .disabled(!f.primaryEnabled(englishReady: model.englishReady))
                 .focused(focus, equals: .primary)
         }
     }
@@ -340,6 +344,16 @@ private struct TryPane: View {
         return HStack(spacing: SetupScale.pt(12)) {
             SetupStatus(color: Ink.warn, text: model.flow.readiness.micFirst ? t.blMic : t.blAx)
             Button(t.pMicB) { model.allowMissing() }.focused(focus, equals: .mic)
+        }
+    }
+
+    /// D22 / R-05: nothing can transcribe yet (no key, and English waits for one): the key line and Connect…, as the
+    /// permissions line above. Without a cloud language there is no Connect step, so only the line shows.
+    private var keyNudge: some View {
+        let t = model.strings, f = model.flow
+        return HStack(spacing: SetupScale.pt(12)) {
+            SetupStatus(color: Ink.warn, text: SetupStrings.fill(AppStrings.for(f.uiLanguage).needsKeySub, key: model.hotkeyLabel))
+            if f.needsCloud { Button(t.dnConnect) { model.connectFromTry() } }
         }
     }
 
@@ -364,7 +378,7 @@ private struct TryPane: View {
                 if model.tryNote == .short { SetupStatus(color: Ink.warn, text: t.tShort) }
                 else if let fail = model.tryFailure, model.tryNote == .idle {
                     // F-11: the window says what went wrong too, not only the card at the bottom of the screen.
-                    let c = fail.shown(f.uiLanguage, readiness: f.readiness)
+                    let c = fail.shown(f.uiLanguage, readiness: model.readiness)
                     SetupStatus(color: Ink.warn, text: c.hint.isEmpty ? c.title : "\(c.title). \(c.hint)")
                 }
                 else if TryFeedback.showsResult(note: model.tryNote) { result }
@@ -467,8 +481,9 @@ private struct DonePane: View {
                     }
                 }
                 SetupGroup {
-                    ForEach(Array(f.doneRows.enumerated()), id: \.offset) { i, row in
-                        SetupRow(label: t.n[row.language] ?? "", caption: caption(row), divider: i < f.doneRows.count - 1) {
+                    let rows = f.doneRows(englishReady: model.englishReady)
+                    ForEach(Array(rows.enumerated()), id: \.offset) { i, row in
+                        SetupRow(label: t.n[row.language] ?? "", caption: caption(row), divider: i < rows.count - 1) {
                             if blocked { SetupState(color: Ink.text3, text: t.dnWait) } else { control(row) }
                         }
                     }
