@@ -137,12 +137,14 @@ A build made on your own Mac is not downloaded from the internet, so macOS shows
    - Only if you never opened a version that moved keys out of the Keychain: open **Keychain Access**, search for `ai.soyla.app`, and delete the items found.
    - In System Settings, Privacy & Security, remove Soyla from Accessibility and Input Monitoring (select it, click the minus button).
 
-## Homebrew (from v0.3.0)
+## Homebrew
 
-From the v0.3.0 release on, Soyla can also be installed from its own tap (the cask is [`Casks/soyla.rb`](../Casks/soyla.rb)):
+Soyla can also be installed from its own tap (the cask is [`Casks/soyla.rb`](../Casks/soyla.rb)):
 
 ```
 brew install --cask ShamsiddinKomil/soyla/soyla
 ```
 
-Homebrew downloads the same zip from this repository's Releases and checks its SHA-256. The first open still needs **Open Anyway** once (section 2), or the command in section 3. Until the v0.3.0 release is out, use sections 1 and 2.
+Homebrew downloads the same zip from this repository's Releases and checks its SHA-256. The first open still needs **Open Anyway** once (section 2), or the command in section 3.
+
+Update: Soyla updates itself (Settings → About), so `brew upgrade` leaves it alone. Uninstall: `brew uninstall --cask soyla`; add `--zap` to also remove its settings, History and saved keys.

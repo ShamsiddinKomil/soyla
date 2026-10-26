@@ -34,6 +34,9 @@ cask "soyla" do
 
   zap trash: [
     "~/Library/Application Support/Soyla",
+    "~/Library/Preferences/ai.soyla.app.plist",
+    "~/Library/Preferences/ai.soyla.settings.plist",
+    "~/Library/Preferences/ai.ovoz.settings.plist", # settings from before the rename
   ]
 
   caveats <<~EOS

@@ -82,7 +82,13 @@ You're here because you were invited: Soyla is in a private preview before it go
 
 Needs **macOS 14 or newer** on Apple silicon (Intel is untested). English can run free on the Mac; Uzbek, Russian and mixed speech need an API key from OpenRouter or Google AI Studio.
 
-1. **Download** `Soyla-vX.Y.Z.zip` from [Releases](https://github.com/ShamsiddinKomil/soyla/releases/latest) (the only official source), unzip it and drag `Soyla.app` to Applications.
+1. **Install.** With [Homebrew](https://brew.sh):
+
+   ```
+   brew install --cask ShamsiddinKomil/soyla/soyla
+   ```
+
+   Or download `Soyla-vX.Y.Z.zip` from [Releases](https://github.com/ShamsiddinKomil/soyla/releases/latest) (the only official source), unzip it and drag `Soyla.app` to Applications.
 2. **Open it once with Open Anyway.** macOS says it cannot verify the app: click **Done**, then System Settings → Privacy & Security → **Open Anyway**. Once per version ([why](docs/INSTALL.md)).
 3. **Follow the Setup Assistant** (about two minutes): pick your languages, allow the microphone and Accessibility, connect a key if you chose Uzbek or Russian, and try one sentence.
 4. **For Uzbek or Russian, connect a key.** [OpenRouter](https://openrouter.ai/keys) is recommended for mixed speech (add $5 of credit; about half a cent per 40 seconds). [Google AI Studio](https://aistudio.google.com/apikey) has a free tier but is reliable for one language at a time, and free-tier audio may be used by Google. Step by step: [docs/KEYS.md](docs/KEYS.md).
@@ -175,7 +181,7 @@ A word-error-rate table on the long test scripts in [docs/TEST_SCRIPTS.md](docs/
 
 ## Roadmap
 
-Next: the published accuracy table, a Homebrew cask, deleting History rows in the app, and a one-call transcribe-and-clean mode if it proves faster. Ideas and bugs: [open an issue](https://github.com/ShamsiddinKomil/soyla/issues). This is a small project used daily by its author, so expect small, frequent releases rather than big ones.
+Next: the published accuracy table, deleting History rows in the app, and a one-call transcribe-and-clean mode if it proves faster. Ideas and bugs: [open an issue](https://github.com/ShamsiddinKomil/soyla/issues). This is a small project used daily by its author, so expect small, frequent releases rather than big ones.
 
 ## Build it yourself
 
